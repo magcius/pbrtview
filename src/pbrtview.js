@@ -77,14 +77,19 @@
         var scene = new Scene(gl);
         var light = new Light([50, 10, 50], [0, 1, 0], 100, 6);
 
+        var eh = new Models.Group();
+        mat4.scale(eh.localMatrix, eh.localMatrix, [2, 2, 2]);
+
         var eh_t = new Models.JMDL(gl, 'eh_t.jmdl');
-        eh_t.setLight(light);
         eh_t.setMaterial([0.92, 0.92, 0.92]);
-        scene.attachModel(eh_t);
+        eh.attachModel(eh_t);
         var eh_b = new Models.JMDL(gl, 'eh_b.jmdl');
-        eh_b.setLight(light);
         eh_b.setMaterial([1.0, 0.4, 0.4]);
-        scene.attachModel(eh_b);
+        eh.attachModel(eh_b);
+
+        eh.forEach(function(mdl) { mdl.setLight(light) });
+        scene.attachModel(eh);
+
         var plane = new Models.Plane(gl);
         plane.setLight(light);
         plane.setMaterial([0.8, 0.8, 0.8]);

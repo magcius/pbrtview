@@ -17,6 +17,38 @@
     // A dumb hack to have "multiline strings".
     function M(X) { return X.join('\n'); }
 
+    var Group = new Class({
+        Name: 'Group',
+
+        initialize: function() {
+            this.children = [];
+            this.localMatrix = mat4.create();
+        },
+
+        render: function(ctx) {
+            this.forEach(function(mdl) {
+                mdl.render(ctx);
+            });
+        },
+
+        attachModel: function(model) {
+            this.children.push(model);
+            model.parentGroup = this;
+        },
+
+        applyModelMatrix: function(mtx) {
+            if (this.parentGroup)
+                this.parentGroup.applyModelMatrix(mtx);
+
+            mat4.multiply(mtx, mtx, this.localMatrix);
+        },
+
+        forEach: function(cb) {
+            this.children.forEach(cb);
+        },
+    });
+    Models.Group = Group;
+
     var BaseModel = new Class({
         Name: 'BaseModel',
 
@@ -31,6 +63,13 @@
 
             var args = [].slice.call(arguments, 1);
             this._buildModel.apply(this, args);
+        },
+
+        applyModelMatrix: function(mtx) {
+            if (this.parentGroup)
+                this.parentGroup.applyModelMatrix(mtx);
+
+            mat4.multiply(mtx, mtx, this.localMatrix);
         },
 
         _buildModel: function() {
@@ -54,14 +93,16 @@
             var prog = ctx.currentProgram;
             gl.uniformMatrix4fv(prog.uniforms.projection, false, ctx.projection);
 
-            gl.uniformMatrix4fv(prog.uniforms.localMatrix, false, this.localMatrix);
+            var mdlMtx = mat4.create();
+            this.applyModelMatrix(mdlMtx);
+            gl.uniformMatrix4fv(prog.uniforms.localMatrix, false, mdlMtx);
 
-            var mat = mat4.create();
-            mat4.multiply(mat, ctx.modelView, this.localMatrix);
-            gl.uniformMatrix4fv(prog.uniforms.modelView, false, mat);
-            mat4.invert(mat, mat);
-            mat4.transpose(mat, mat);
-            gl.uniformMatrix4fv(prog.uniforms.normalMatrix, false, mat);
+            var mtx = mat4.create();
+            mat4.multiply(mtx, ctx.modelView, mdlMtx);
+            gl.uniformMatrix4fv(prog.uniforms.modelView, false, mtx);
+            mat4.invert(mtx, mtx);
+            mat4.transpose(mtx, mtx);
+            gl.uniformMatrix4fv(prog.uniforms.normalMatrix, false, mtx);
 
             gl.bindBuffer(gl.ARRAY_BUFFER, this._nrmlBuffer);
             gl.vertexAttribPointer(prog.attribs.normal, 3, gl.FLOAT, false, 0, 0);
