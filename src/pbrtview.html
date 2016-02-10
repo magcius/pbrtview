@@ -1,0 +1,23 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf8">
+    <title>pbrtview</title>
+    <style>
+    button, select { font-size: 150%; }
+    canvas { cursor: grab; cursor: -webkit-grab; }
+    .grabbing { cursor: grabbing; cursor: -webkit-grabbing; }
+    .grabbing canvas { cursor: inherit; }
+    </style>
+  </head>
+  <body class>
+    <center>
+    <canvas id="scene" width="1368" height="768"></canvas>
+
+    <script src="class.js"></script>
+    <script src="gl-matrix.js"></script>
+    <script src="gl-utils.js"></script>
+    <script src="models.js"></script>
+    <script src="pbrtview.js"></script>
+  </body>
+</html>
