@@ -167,7 +167,7 @@
         '',
         'void main() {',
         '    v_position = u_localMatrix * vec4(a_position, 1.0);',
-        '    v_normal = u_modelView * vec4(a_normal, 1.0);',
+        '    v_normal = u_normalMatrix * vec4(a_normal, 1.0);',
         '    gl_Position = u_projection * u_modelView * vec4(a_position, 1.0);',
         '}',
     ]);
@@ -215,6 +215,7 @@
     ]);
     */
 
+
     var SINGLE_LIGHT_FRAG_SHADER_SOURCE = M([
         'precision mediump float;',
         '',
@@ -233,11 +234,31 @@
         '    return pow(clamp(1.0 + -dist / light.distanceCutoff, 0.0, 1.0), light.decay);',
         '}',
         '',
+        'vec3 brdf_Diffuse_Lambert(const in vec3 diffuseColor) {',
+        '    // Intensity is already specified in pi units, so no divide here.',
+        '    return diffuseColor;',
+        '}',
+        '',
+        'vec3 brdf_F_Schlick(const in vec3 l, const in vec3 h, const in vec3 specularColor) {',
+        '    float LoH = clamp(dot(l, h), 0.0, 1.0);',
+        '    float fresnel = pow(1.0 - LoH, 5.0);',
+        '    return specularColor + (1.0 - specularColor) * fresnel;',
+        '}',
+        '',
+        'float brdf_D_GGX(const in vec3 n, const in vec3 h, const in float roughness) {',
+        '    // Use the Disney GGX/Troughbridge-Reitz. Stolen from s2013_pbs_epic_notes_v2.pdf',
+        '    float alpha = roughness * roughness;',
+        '    float NoH = clamp(dot(n, h), 0.0, 1.0);',
+        '    float alpha2 = alpha * alpha;',
+        '    float denom = ((NoH * NoH) * (alpha2 - 1.0)) + 1.0;',
+        '    return alpha2 / denom*denom;',
+        '}',
+        '',
         'vec3 light_getIrradiance(const in Light light) {',
         '    vec3 diff = light.pos.xyz - v_position.xyz;',
         '    vec3 color = light.color * attenuate(light, length(diff));',
         '    vec3 direction = normalize(diff);',
-        '    float NoL = clamp(dot(v_position.xyz, direction), 0.0, 1.0);',
+        '    float NoL = clamp(dot(v_normal.xyz, direction), 0.0, 1.0);',
         '    vec3 irradiance = NoL * color;',
         '    return irradiance;',
         '}',
@@ -245,7 +266,7 @@
         'void main() {',
         '    vec3 albedo = u_modelDiff;',
         '    // Crummy env lighting.',
-        '    vec3 indirectIrradiance = albedo * 0.75;',
+        '    vec3 indirectIrradiance = albedo * 0.6;',
         '',
         '    vec3 directIrradiance = light_getIrradiance(u_light);',
         '    vec3 color = directIrradiance + indirectIrradiance;',
@@ -450,6 +471,19 @@
             verts[9]  = 1;
             verts[10] = 0;
             verts[11] = 1;
+
+            nrmls[0] = 0;
+            nrmls[1] = 1;
+            nrmls[2] = 0;
+            nrmls[3] = 0;
+            nrmls[4] = 1;
+            nrmls[5] = 0;
+            nrmls[6] = 0;
+            nrmls[7] = 1;
+            nrmls[8] = 0;
+            nrmls[9] = 0;
+            nrmls[10] = 1;
+            nrmls[11] = 0;
 
             var prim = {};
             prim.color = [0.8, 0.8, 0.8];
