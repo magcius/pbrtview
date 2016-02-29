@@ -75,7 +75,7 @@
         gl.viewportHeight = canvas.height;
 
         var scene = new Scene(gl);
-        var light = new Light([50, 10, 50], [0, 1, 0], 100, 6);
+        var light = new Light([50, 40, 50], [1, 1, 1], 1000, 5);
 
         var eh = new Models.Group();
         mat4.scale(eh.localMatrix, eh.localMatrix, [2, 2, 2]);
