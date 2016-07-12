@@ -1,6 +1,13 @@
 (function(exports) {
     "use strict";
 
+    function clamp(x, min, max) {
+        return Math.max(min, Math.min(x, max));
+    }
+    function absclamp(x, lim) {
+        return clamp(x, -lim, lim);
+    }
+
     var RenderContext = new Class({
         Name: 'RenderContext',
 
@@ -113,8 +120,6 @@
 
         function updateCamera() {
             var x = P, y = T;
-            x = Math.max(x, 0.04);
-
             var sinX = Math.sin(x);
             var cosX = Math.cos(x);
             var sinY = Math.sin(y);
@@ -128,6 +133,7 @@
             scene.setCamera(camera);
         }
 
+        var vT = 0, vP = 0;
         function simplerot() {
             var dragging = false, px, py;
             canvas.addEventListener('mousedown', function(e) {
@@ -145,8 +151,8 @@
                 var dy = e.pageY - py;
                 px = e.pageX; py = e.pageY;
 
-                T += dx / 100;
-                P += dy / 100;
+                vT += dx / 100;
+                vP += dy / 100;
             });
         }
         simplerot();
@@ -161,14 +167,20 @@
             light.position[2] = Math.sin(t / 730) * 30;
 
             if (isKeyDown('A'))
-                T += 0.05;
+                vT += 0.05;
             if (isKeyDown('D'))
-                T -= 0.05;
+                vT -= 0.05;
             if (isKeyDown('W'))
-                P += 0.05;
+                vP += 0.05;
             if (isKeyDown('S'))
-                P -= 0.05;
+                vP -= 0.05;
 
+            vP = absclamp(vP, 2);
+            vT = absclamp(vT, 2);
+            P += vP / 10; vP *= 0.98;
+            T += vT / 10; vT *= 0.98;
+            if (P < 0.04) P = 0.04, vP = 0;
+            if (P > 1.50) P = 1.50, vP = 0;
             updateCamera();
 
             scene.update();
