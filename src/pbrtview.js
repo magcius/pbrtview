@@ -111,15 +111,45 @@
         });
         var t = 0;
 
-        function setCameraFromTP(theta) {
-            var camera = mat4.create();
-            var rad = 50;
-            var mx = rad * Math.cos(theta);
-            var my = 30;
-            var mz = rad * Math.sin(theta);
+        function updateCamera() {
+            var x = P, y = T;
+            x = Math.max(x, 0.04);
 
-            mat4.lookAt(scene._modelView, [mx, my, mz], [0, 0, 0], [0, 1, 0]);
+            var sinX = Math.sin(x);
+            var cosX = Math.cos(x);
+            var sinY = Math.sin(y);
+            var cosY = Math.cos(y);
+            var camera = [
+                cosY, sinX*sinY, -cosX*sinY, 0,
+                0, cosX, sinX, 0,
+                sinY, -sinX*cosY, cosX*cosY, 0,
+                0, 0, -50, 1
+            ];
+            scene.setCamera(camera);
         }
+
+        function simplerot() {
+            var dragging = false, px, py;
+            canvas.addEventListener('mousedown', function(e) {
+                dragging = true;
+                px = e.pageX; py = e.pageY;
+            });
+            canvas.addEventListener('mouseup', function(e) {
+                dragging = false;
+            });
+            canvas.addEventListener('mousemove', function(e) {
+                if (!dragging)
+                    return;
+
+                var dx = e.pageX - px;
+                var dy = e.pageY - py;
+                px = e.pageX; py = e.pageY;
+
+                T += dx / 100;
+                P += dy / 100;
+            });
+        }
+        simplerot();
 
         var T = 0.35, P = 0.10;
 
@@ -139,7 +169,7 @@
             if (isKeyDown('S'))
                 P -= 0.05;
 
-            setCameraFromTP(T, P);
+            updateCamera();
 
             scene.update();
             window.requestAnimationFrame(update);
