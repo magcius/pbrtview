@@ -134,30 +134,29 @@
         }
 
         var vT = 0, vP = 0;
-        function simplerot() {
-            var dragging = false, px, py;
-            canvas.addEventListener('mousedown', function(e) {
-                dragging = true;
-                px = e.pageX; py = e.pageY;
-            });
-            canvas.addEventListener('mouseup', function(e) {
-                dragging = false;
-            });
-            canvas.addEventListener('mousemove', function(e) {
-                if (!dragging)
-                    return;
+        var dragging = false, px, py;
+        canvas.addEventListener('mousedown', function(e) {
+            dragging = true;
+            canvas.classList.add('grabbing');
+            px = e.pageX; py = e.pageY;
+        });
+        canvas.addEventListener('mouseup', function(e) {
+            dragging = false;
+            canvas.classList.remove('grabbing');
+        });
+        canvas.addEventListener('mousemove', function(e) {
+            if (!dragging)
+                return;
 
-                var dx = e.pageX - px;
-                var dy = e.pageY - py;
-                px = e.pageX; py = e.pageY;
+            var dx = e.pageX - px;
+            var dy = e.pageY - py;
+            px = e.pageX; py = e.pageY;
 
-                vT += dx / 100;
-                vP += dy / 100;
-            });
-        }
-        simplerot();
+            vT += dx / 200;
+            vP += dy / 200;
+        });
 
-        var T = 0.35, P = 0.10;
+        var T = 0.35, P = 0.15;
 
         function update(nt) {
             var dt = nt - t;
@@ -177,8 +176,9 @@
 
             vP = absclamp(vP, 2);
             vT = absclamp(vT, 2);
-            P += vP / 10; vP *= 0.98;
-            T += vT / 10; vT *= 0.98;
+            var drag = dragging ? 0.94 : 0.98;
+            P += vP / 10; vP *= drag;
+            T += vT / 10; vT *= drag;
             if (P < 0.04) P = 0.04, vP = 0;
             if (P > 1.50) P = 1.50, vP = 0;
             updateCamera();
