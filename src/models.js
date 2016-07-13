@@ -100,12 +100,13 @@
             this.applyModelMatrix(mdlMtx);
             gl.uniformMatrix4fv(prog.uniforms.localMatrix, false, mdlMtx);
             var mtx = mat4.create();
-            mat4.invert(mtx, mdlMtx);
-            mat4.transpose(mtx, mtx);
-            gl.uniformMatrix4fv(prog.uniforms.normalMatrix, false, mtx);
+
+            gl.uniformMatrix4fv(prog.uniforms.viewMatrix, false, ctx.view);
 
             mat4.multiply(mtx, ctx.view, mdlMtx);
-            gl.uniformMatrix4fv(prog.uniforms.modelView, false, mtx);
+            mat4.invert(mtx, mtx);
+            mat4.transpose(mtx, mtx);
+            gl.uniformMatrix4fv(prog.uniforms.normalMatrix, false, mtx);
 
             gl.bindBuffer(gl.ARRAY_BUFFER, this._nrmlBuffer);
             gl.vertexAttribPointer(prog.attribs.normal, 3, gl.FLOAT, false, 0, 0);
@@ -143,7 +144,7 @@
         'precision mediump float;',
         '',
         'uniform mat4 u_localMatrix;',
-        'uniform mat4 u_modelView;',
+        'uniform mat4 u_viewMatrix;',
         'uniform mat4 u_normalMatrix;',
         'uniform mat4 u_projection;',
         '',
@@ -152,12 +153,12 @@
         '',
         'varying vec4 v_positionWorld;',
         'varying vec4 v_positionEye;',
-        'varying vec4 v_normalWorld;',
+        'varying vec4 v_normalEye;',
         '',
         'void main() {',
         '    v_positionWorld = u_localMatrix * vec4(a_position, 1.0);',
-        '    v_positionEye = u_modelView * vec4(a_position, 1.0);',
-        '    v_normalWorld = u_normalMatrix * vec4(a_normal, 1.0);',
+        '    v_positionEye = u_viewMatrix * v_positionWorld;',
+        '    v_normalEye = u_normalMatrix * vec4(a_normal, 1.0);',
         '    gl_Position = u_projection * v_positionEye;',
         '}',
     ]);
@@ -170,13 +171,13 @@
         '    float radius;',
         '};',
         '',
-        'uniform mat4 u_modelView;',
+        'uniform mat4 u_viewMatrix;',
         'uniform vec3 u_diffuseColor;',
         'uniform Light u_light;',
         '',
         'varying vec4 v_positionWorld;',
         'varying vec4 v_positionEye;',
-        'varying vec4 v_normalWorld;',
+        'varying vec4 v_normalEye;',
         '',
         'float attenuate(const in Light light, const in float dist) {',
         '    return (light.radius - dist) / (dist*dist);',
@@ -223,11 +224,12 @@
         '}',
         '',
         'vec3 light_getIrradiance(const in Light light) {',
-        '    vec3 lightToModel = light.pos.xyz - v_positionWorld.xyz;',
+        '    vec3 lightPosEye = (u_viewMatrix * vec4(light.pos, 1.0)).xyz;',
+        '    vec3 lightToModel = lightPosEye - v_positionEye.xyz;',
         '    vec3 lightColor = light.color * attenuate(light, length(lightToModel));',
         '',
         '    vec3 L = normalize(lightToModel);',
-        '    vec3 N = normalize(v_normalWorld.xyz);',
+        '    vec3 N = normalize(v_normalEye.xyz);',
         '    vec3 V = normalize(-v_positionEye.xyz);',
         '',
         '    float NoL = clamp(dot(N, L), 0.0, 1.0);',
@@ -262,7 +264,7 @@
         prog.uniforms = {};
         prog.uniforms.projection = gl.getUniformLocation(prog, "u_projection");
         prog.uniforms.localMatrix = gl.getUniformLocation(prog, "u_localMatrix");
-        prog.uniforms.modelView = gl.getUniformLocation(prog, "u_modelView");
+        prog.uniforms.viewMatrix = gl.getUniformLocation(prog, "u_viewMatrix");
         prog.uniforms.normalMatrix = gl.getUniformLocation(prog, "u_normalMatrix");
         prog.uniforms.diffuseColor = gl.getUniformLocation(prog, "u_diffuseColor");
 
