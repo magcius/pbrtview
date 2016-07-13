@@ -67,9 +67,8 @@
         },
     });
 
-    function Light(position, color, distanceCutoff, decay) {
-        return { position: position, color: color,
-                 distanceCutoff: distanceCutoff, decay: decay };
+    function Light(position, color, radius) {
+        return { position: position, color: color, radius: radius };
     }
 
     function createViewer(canvas) {
@@ -82,7 +81,7 @@
         gl.viewportHeight = canvas.height;
 
         var scene = new Scene(gl);
-        var light = new Light([50, 20, 50], [1, .5, 1], 1000, 5);
+        var light = new Light([50, 20, 50], [1, 1, 1], 300);
 
         var eh = new Models.Group();
         mat4.scale(eh.localMatrix, eh.localMatrix, [2, 2, 2]);

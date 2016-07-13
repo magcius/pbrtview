@@ -99,13 +99,13 @@
             var mdlMtx = mat4.create();
             this.applyModelMatrix(mdlMtx);
             gl.uniformMatrix4fv(prog.uniforms.localMatrix, false, mdlMtx);
-
             var mtx = mat4.create();
-            mat4.multiply(mtx, ctx.view, mdlMtx);
-            gl.uniformMatrix4fv(prog.uniforms.modelView, false, mtx);
-            mat4.invert(mtx, mtx);
+            mat4.invert(mtx, mdlMtx);
             mat4.transpose(mtx, mtx);
             gl.uniformMatrix4fv(prog.uniforms.normalMatrix, false, mtx);
+
+            mat4.multiply(mtx, ctx.view, mdlMtx);
+            gl.uniformMatrix4fv(prog.uniforms.modelView, false, mtx);
 
             gl.bindBuffer(gl.ARRAY_BUFFER, this._nrmlBuffer);
             gl.vertexAttribPointer(prog.attribs.normal, 3, gl.FLOAT, false, 0, 0);
@@ -142,27 +142,23 @@
     var SINGLE_LIGHT_VERT_SHADER_SOURCE = M([
         'precision mediump float;',
         '',
-        'struct Light {',
-        '    vec3 pos, color;',
-        '    float distanceCutoff, decay;',
-        '};',
-        '',
         'uniform mat4 u_localMatrix;',
         'uniform mat4 u_modelView;',
         'uniform mat4 u_normalMatrix;',
         'uniform mat4 u_projection;',
-        'uniform Light u_light;',
         '',
         'attribute vec3 a_position;',
         'attribute vec3 a_normal;',
         '',
-        'varying vec4 v_position;',
-        'varying vec4 v_normal;',
+        'varying vec4 v_positionWorld;',
+        'varying vec4 v_positionEye;',
+        'varying vec4 v_normalWorld;',
         '',
         'void main() {',
-        '    v_position = u_localMatrix * vec4(a_position, 1.0);',
-        '    v_normal = u_normalMatrix * vec4(a_normal, 1.0);',
-        '    gl_Position = u_projection * u_modelView * vec4(a_position, 1.0);',
+        '    v_positionWorld = u_localMatrix * vec4(a_position, 1.0);',
+        '    v_positionEye = u_modelView * vec4(a_position, 1.0);',
+        '    v_normalWorld = u_normalMatrix * vec4(a_normal, 1.0);',
+        '    gl_Position = u_projection * v_positionEye;',
         '}',
     ]);
 
@@ -171,17 +167,19 @@
         '',
         'struct Light {',
         '    vec3 pos, color;',
-        '    float distanceCutoff, decay;',
+        '    float radius;',
         '};',
         '',
-        'uniform vec3 u_modelDiff;',
+        'uniform mat4 u_modelView;',
+        'uniform vec3 u_diffuseColor;',
         'uniform Light u_light;',
         '',
-        'varying vec4 v_position;',
-        'varying vec4 v_normal;',
+        'varying vec4 v_positionWorld;',
+        'varying vec4 v_positionEye;',
+        'varying vec4 v_normalWorld;',
         '',
         'float attenuate(const in Light light, const in float dist) {',
-        '    return pow(clamp(1.0 + -dist / light.distanceCutoff, 0.0, 1.0), light.decay);',
+        '    return (light.radius - dist) / (dist*dist);',
         '}',
         '',
         'vec3 brdf_Diffuse_Lambert(const in vec3 diffuseColor) {',
@@ -202,7 +200,9 @@
         '',
         '    float NoL = clamp(dot(N, L), 0.0, 1.0);',
         '    float NoV = clamp(dot(N, V), 0.0, 1.0);',
-        '    return NoL * NoV * (1.0 / (mix(NoL, 1.0, k) * mix(NoV, 1.0, k)));',
+        '    float G1L = 1.0 / (NoL * (1.0 - k) + k);',
+        '    float G1V = 1.0 / (NoV * (1.0 - k) + k);',
+        '    return (G1L * G1V) / (4.0);', 
         '}',
         '',
         'float brdf_D_GGX(const in vec3 N, const in vec3 H, const in float roughness) {',
@@ -216,35 +216,35 @@
         '',
         'vec3 brdf_Specular_GGX(const in vec3 N, const in vec3 L, const in vec3 V, const in float roughness) {',
         '    vec3 H = normalize(L + V);',
-        '    vec3 F = brdf_F_Schlick(L, H, vec3(0.0, 0.0, 0.0));',
+        '    vec3 F = brdf_F_Schlick(L, H, vec3(0.04, 0.04, 0.04));',
         '    float G = brdf_G_GGX_Smith(N, L, V, roughness);',
         '    float D = brdf_D_GGX(N, H, roughness);',
-        '    return F * D;',
+        '    return F * G * D;',
         '}',
         '',
         'vec3 light_getIrradiance(const in Light light) {',
-        '    vec3 diff = light.pos.xyz - v_position.xyz;',
-        '    vec3 color = light.color * attenuate(light, length(diff));',
+        '    vec3 lightToModel = light.pos.xyz - v_positionWorld.xyz;',
+        '    vec3 lightColor = light.color * attenuate(light, length(lightToModel));',
         '',
-        '    vec3 L = normalize(diff);',
-        '    vec3 N = normalize(v_normal.xyz);',
-        '    vec3 V = normalize(-v_position.xyz);',
+        '    vec3 L = normalize(lightToModel);',
+        '    vec3 N = normalize(v_normalWorld.xyz);',
+        '    vec3 V = normalize(-v_positionEye.xyz);',
         '',
         '    float NoL = clamp(dot(N, L), 0.0, 1.0);',
-        '    vec3 irradiance = NoL * color;',
-        '    vec3 diffuse = brdf_Diffuse_Lambert(irradiance);',
-        '    vec3 specular = color * brdf_Specular_GGX(N, L, V, 0.1);',
-        '',
-        '    vec3 outgoingLight = diffuse + specular;',
+        '    vec3 diffuse = brdf_Diffuse_Lambert(u_diffuseColor);',
+        '    vec3 specular = brdf_Specular_GGX(N, L, V, 0.1);',
+        '    vec3 irradiance = lightColor * NoL;',
+        '    // Technically not energy-conserving, since we add the same light',
+        '    // for both specular and diffuse, but it\'s minimal so we don\'t care...',
+        '    vec3 outgoingLight = irradiance * diffuse + irradiance * specular;',
         '    return outgoingLight;',
         '}',
         '',
         'void main() {',
-        '    vec3 albedo = u_modelDiff;',
         '    // Crummy env lighting.',
-        '    vec3 indirectIrradiance = albedo * 0.2;',
+        '    vec3 indirectIrradiance = vec3(0.2, 0.2, 0.2);',
         '',
-        '    vec3 directIrradiance = light_getIrradiance(u_light) * albedo;',
+        '    vec3 directIrradiance = light_getIrradiance(u_light);',
         '    vec3 color = directIrradiance + indirectIrradiance;',
         '    gl_FragColor = vec4(color, 1.0);',
         '}',
@@ -264,13 +264,12 @@
         prog.uniforms.localMatrix = gl.getUniformLocation(prog, "u_localMatrix");
         prog.uniforms.modelView = gl.getUniformLocation(prog, "u_modelView");
         prog.uniforms.normalMatrix = gl.getUniformLocation(prog, "u_normalMatrix");
-        prog.uniforms.modelDiffuse = gl.getUniformLocation(prog, "u_modelDiff");
+        prog.uniforms.diffuseColor = gl.getUniformLocation(prog, "u_diffuseColor");
 
         prog.uniforms.light = {};
         prog.uniforms.light.position = gl.getUniformLocation(prog, "u_light.pos");
         prog.uniforms.light.color = gl.getUniformLocation(prog, "u_light.color");
-        prog.uniforms.light.distanceCutoff = gl.getUniformLocation(prog, "u_light.distanceCutoff");
-        prog.uniforms.light.decay = gl.getUniformLocation(prog, "u_light.decay");
+        prog.uniforms.light.radius = gl.getUniformLocation(prog, "u_light.radius");
 
         prog.attribs = {};
         prog.attribs.position = gl.getAttribLocation(prog, "a_position");
@@ -296,9 +295,8 @@
 
             gl.uniform3fv(prog.uniforms.light.position, this._light.position);
             gl.uniform3fv(prog.uniforms.light.color, this._light.color);
-            gl.uniform1f(prog.uniforms.light.distanceCutoff, this._light.distanceCutoff);
-            gl.uniform1f(prog.uniforms.light.decay, this._light.decay);
-            gl.uniform3fv(prog.uniforms.modelDiffuse, this._diffuseColor);
+            gl.uniform1f(prog.uniforms.light.radius, this._light.radius);
+            gl.uniform3fv(prog.uniforms.diffuseColor, this._diffuseColor);
         },
 
         setLight: function(light) {
