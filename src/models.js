@@ -56,9 +56,7 @@
             this._gl = gl;
 
             this._renderProgram = null;
-            this._contactPoint = null;
             this._primitives = [];
-            this._surface = null;
             this.localMatrix = mat4.create();
 
             var args = [].slice.call(arguments, 1);
@@ -134,15 +132,6 @@
             }.bind(this));
             this._renderEpilogue(ctx);
         },
-
-        _renderPickSurface: function(ctx, surface) {
-            this._renderPrimitive(ctx, surface.prim);
-        },
-        pick: function(ctx, pickId) {
-            this._renderPrologue(ctx);
-            this._renderPrimitive(ctx, this._surface.prim);
-            this._renderEpilogue(ctx);
-        },
     });
 
     var SINGLE_LIGHT_VERT_SHADER_SOURCE = M([
@@ -171,10 +160,6 @@
         '    gl_Position = u_projection * u_modelView * vec4(a_position, 1.0);',
         '}',
     ]);
-
-
-
-
 
     var SINGLE_LIGHT_FRAG_SHADER_SOURCE = M([
         'precision mediump float;',
