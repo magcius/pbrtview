@@ -355,53 +355,6 @@
                 this._buildModelBuf(req.response);
             }.bind(this);
         },
-        _buildModelObj: function(S) {
-            var gl = this._gl;
-
-            var lines = S.split('\n');
-            var v = ['dummy'];
-            var f = [];
-
-            function parse3(parts) {
-                return parts.map(function(v) { return parseFloat(v); });
-            }
-            function parsef(parts) {
-                function parseaf(af) {
-                    var ap = af.split('/');
-                    var vi = ap[0];
-                    return v[vi];
-                }
-                return parts.map(function(v) { return parseaf(v); });
-            }
-
-            lines.forEach(function(line) {
-                var parts = line.split(' ');
-                var cmd = parts.shift();
-                if (cmd === 'v')
-                    return v.push(parse3(parts));
-                if (cmd === 'f')
-                    return f.push(parsef(parts));
-            });
-
-            var nface = f.length;
-            var verts = new Float32Array(3 * 3 * nface);
-            var norms = new Float32Array(3 * 3 * nface);
-            for (var i = 0; i < nface; i++) {
-                for (var j = 0; j < 3; j++) {
-                    verts[i*9+j*3+0] = f[i][j][0];
-                    verts[i*9+j*3+1] = f[i][j][1];
-                    verts[i*9+j*3+2] = f[i][j][2];
-                }
-            }
-
-            var prim = {};
-            prim.start = 0;
-            prim.count = nface * 3;
-            prim.drawType = gl.TRIANGLES;
-            this._primitives.push(prim);
-
-            this._setBuffers(verts, norms);
-        },
         _buildModelBuf: function(buffer) {
             var gl = this._gl;
 
