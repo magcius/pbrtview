@@ -47,6 +47,9 @@
         setCamera: function(mat) {
             mat4.copy(this._view, mat);
         },
+        setLights: function(lights) {
+            this._renderCtx.lights = lights;
+        },
 
         attachModel: function(model) {
             this.models.push(model);
@@ -82,6 +85,7 @@
             new Light([50, 30, 50], [1, .4, .4], 100),
             new Light([50, 40, 50], [.4, 1, .4], 150),
         ];
+        scene.setLights(lights);
 
         var eh = new Models.Group();
         mat4.scale(eh.localMatrix, eh.localMatrix, [2, 2, 2]);
@@ -93,11 +97,9 @@
         eh_b.setMaterial([1.0, 0.4, 0.4], 0.5);
         eh.attachModel(eh_b);
 
-        eh.forEach(function(mdl) { mdl.setLights(lights) });
         scene.attachModel(eh);
 
         var plane = new Models.Plane(gl);
-        plane.setLights(lights);
         plane.setMaterial([1, 1, 1], 0.5);
         mat4.scale(plane.localMatrix, plane.localMatrix, [50, 1, 50]);
         scene.attachModel(plane);

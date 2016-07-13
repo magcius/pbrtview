@@ -140,7 +140,7 @@
         },
     });
 
-    var PBR_LIGHT_VERT_SHADER_SOURCE = M([
+    var PBR_VERT_SHADER_SOURCE = M([
         'precision mediump float;',
         '',
         'uniform mat4 u_localMatrix;',
@@ -302,7 +302,7 @@
         _buildModel: function() {
             this.parent();
             var gl = this._gl;
-            this._renderProgram = createSingleLightProgram(gl);
+            this._renderProgram = createPBRProgram(gl);
         },
 
         _renderPrologue: function(ctx) {
@@ -316,7 +316,7 @@
                 gl.uniform1f(glLight.radius, mLight.radius);
             }
 
-            this._lights.forEach(function(mLight, i) {
+            ctx.lights.forEach(function(mLight, i) {
                 setLight(prog.uniforms.lights[i], mLight);
             });
 
@@ -324,9 +324,6 @@
             gl.uniform1f(prog.uniforms.roughness, this._roughness);
         },
 
-        setLights: function(lights) {
-            this._lights = lights;
-        },
         setMaterial: function(diffuseColor, roughness) {
             this._diffuseColor = diffuseColor;
             this._roughness = roughness;
