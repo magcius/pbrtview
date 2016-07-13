@@ -178,7 +178,9 @@
         '',
         'uniform mat4 u_viewMatrix;',
         'uniform Material u_material;',
-        'uniform Light u_light;',
+        '',
+        '#define NUM_LIGHTS 4',
+        'uniform Light u_lights[NUM_LIGHTS];',
         '',
         'varying vec4 v_positionWorld;',
         'varying vec4 v_positionEye;',
@@ -245,7 +247,10 @@
         '}',
         '',
         'void main() {',
-        '    vec3 directReflectedLight = light_getReflectedLight(u_light);',
+        '    vec3 directReflectedLight = vec3(0.0);',
+        '',
+        '    for (int i = 0; i < NUM_LIGHTS; i++)',
+        '        directReflectedLight += light_getReflectedLight(u_lights[i]);',
         '',
         '    vec3 indirectDiffuseIrradiance = vec3(0.5, 0.5, 0.5);',
         '    vec3 indirectReflectedLight = indirectDiffuseIrradiance * u_material.diffuseColor;',
@@ -272,14 +277,20 @@
         prog.uniforms.diffuseColor = gl.getUniformLocation(prog, "u_material.diffuseColor");
         prog.uniforms.roughness = gl.getUniformLocation(prog, "u_material.roughness");
 
-        prog.uniforms.light = {};
-        prog.uniforms.light.position = gl.getUniformLocation(prog, "u_light.pos");
-        prog.uniforms.light.color = gl.getUniformLocation(prog, "u_light.color");
-        prog.uniforms.light.radius = gl.getUniformLocation(prog, "u_light.radius");
-
         prog.attribs = {};
         prog.attribs.position = gl.getAttribLocation(prog, "a_position");
         prog.attribs.normal = gl.getAttribLocation(prog, "a_normal");
+
+        // there are four lights.
+        var NUM_LIGHTS = 4;
+        prog.uniforms.lights = [];
+        for (var i = 0; i < NUM_LIGHTS; i++) {
+            var light = {};
+            light.position = gl.getUniformLocation(prog, "u_lights["+i+"].pos");
+            light.color = gl.getUniformLocation(prog, "u_lights["+i+"].color");
+            light.radius = gl.getUniformLocation(prog, "u_lights["+i+"].radius");
+            prog.uniforms.lights.push(light);
+        }
 
         return prog;
     }
@@ -299,15 +310,22 @@
             var gl = this._gl;
             var prog = ctx.currentProgram;
 
-            gl.uniform3fv(prog.uniforms.light.position, this._light.position);
-            gl.uniform3fv(prog.uniforms.light.color, this._light.color);
-            gl.uniform1f(prog.uniforms.light.radius, this._light.radius);
+            function setLight(glLight, mLight) {
+                gl.uniform3fv(glLight.position, mLight.position);
+                gl.uniform3fv(glLight.color, mLight.color);
+                gl.uniform1f(glLight.radius, mLight.radius);
+            }
+
+            this._lights.forEach(function(mLight, i) {
+                setLight(prog.uniforms.lights[i], mLight);
+            });
+
             gl.uniform3fv(prog.uniforms.diffuseColor, this._diffuseColor);
             gl.uniform1f(prog.uniforms.roughness, this._roughness);
         },
 
-        setLight: function(light) {
-            this._light = light;
+        setLights: function(lights) {
+            this._lights = lights;
         },
         setMaterial: function(diffuseColor, roughness) {
             this._diffuseColor = diffuseColor;

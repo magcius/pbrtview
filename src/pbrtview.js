@@ -74,14 +74,14 @@
     function createViewer(canvas) {
         var gl = canvas.getContext("webgl", { alpha: false });
 
-        // Enable EXT_frag_depth
-        gl.getExtension('EXT_frag_depth');
-
         gl.viewportWidth = canvas.width;
         gl.viewportHeight = canvas.height;
 
         var scene = new Scene(gl);
-        var light = new Light([50, 30, 50], [1, 1, 1], 100);
+        var lights = [
+            new Light([50, 30, 50], [1, .4, .4], 100),
+            new Light([50, 40, 50], [.4, 1, .4], 150),
+        ];
 
         var eh = new Models.Group();
         mat4.scale(eh.localMatrix, eh.localMatrix, [2, 2, 2]);
@@ -93,18 +93,19 @@
         eh_b.setMaterial([1.0, 0.4, 0.4], 0.5);
         eh.attachModel(eh_b);
 
-        eh.forEach(function(mdl) { mdl.setLight(light) });
+        eh.forEach(function(mdl) { mdl.setLights(lights) });
         scene.attachModel(eh);
 
         var plane = new Models.Plane(gl);
-        plane.setLight(light);
+        plane.setLights(lights);
         plane.setMaterial([1, 1, 1], 0.5);
         mat4.scale(plane.localMatrix, plane.localMatrix, [50, 1, 50]);
         scene.attachModel(plane);
 
-        var light_bb = new Models.Billboard(gl);
-        light_bb.setColor(light.color);
-        scene.attachModel(light_bb);
+        lights.forEach(function(light) {
+            light.bb = new Models.Billboard(gl);
+            scene.attachModel(light.bb);
+        });
 
         var keysDown = {};
         var SHIFT = 16;
@@ -121,7 +122,7 @@
         });
         var t = 0;
 
-        var Z = -100;
+        var Z = -150;
         var vZ = 0;
         function updateCamera() {
             var x = P, y = T;
@@ -171,9 +172,15 @@
             var dt = nt - t;
             t = nt;
 
-            light.position[0] = Math.cos(t / 890) * 30;
-            light.position[2] = Math.sin(t / 730) * 30;
-            light_bb.setPosition(light.position);
+            lights[0].position[0] = Math.cos(t / 890) * 30;
+            lights[0].position[2] = Math.sin(t / 730) * 30;
+            lights[1].position[0] = Math.cos(t / 930 + 1) * 30;
+            lights[1].position[2] = Math.sin(t / 670 + 1) * 30;
+
+            lights.forEach(function(light) {
+                light.bb.setPosition(light.position);
+                light.bb.setColor(light.color);
+            });
 
             if (isKeyDown('A'))
                 vT += 0.05;
