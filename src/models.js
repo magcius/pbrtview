@@ -75,13 +75,18 @@
 
         _setBuffers: function(verts, nrmls) {
             var gl = this._gl;
-            this._vertBuffer = gl.createBuffer();
-            gl.bindBuffer(gl.ARRAY_BUFFER, this._vertBuffer);
-            gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
 
-            this._nrmlBuffer = gl.createBuffer();
-            gl.bindBuffer(gl.ARRAY_BUFFER, this._nrmlBuffer);
-            gl.bufferData(gl.ARRAY_BUFFER, nrmls, gl.STATIC_DRAW);
+            if (verts) {
+                this._vertBuffer = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, this._vertBuffer);
+                gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
+            }
+
+            if (nrmls) {
+                this._nrmlBuffer = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, this._nrmlBuffer);
+                gl.bufferData(gl.ARRAY_BUFFER, nrmls, gl.STATIC_DRAW);
+            }
 
             this._loaded = true;
         },
@@ -96,7 +101,7 @@
             gl.uniformMatrix4fv(prog.uniforms.localMatrix, false, mdlMtx);
 
             var mtx = mat4.create();
-            mat4.multiply(mtx, ctx.modelView, mdlMtx);
+            mat4.multiply(mtx, ctx.view, mdlMtx);
             gl.uniformMatrix4fv(prog.uniforms.modelView, false, mtx);
             mat4.invert(mtx, mtx);
             mat4.transpose(mtx, mtx);
@@ -214,7 +219,7 @@
         '    vec3 F = brdf_F_Schlick(L, H, vec3(0.0, 0.0, 0.0));',
         '    float G = brdf_G_GGX_Smith(N, L, V, roughness);',
         '    float D = brdf_D_GGX(N, H, roughness);',
-        '    return F * (G * D);',
+        '    return F * D;',
         '}',
         '',
         'vec3 light_getIrradiance(const in Light light) {',
@@ -228,7 +233,7 @@
         '    float NoL = clamp(dot(N, L), 0.0, 1.0);',
         '    vec3 irradiance = NoL * color;',
         '    vec3 diffuse = brdf_Diffuse_Lambert(irradiance);',
-        '    vec3 specular =  brdf_Specular_GGX(N, L, V, 0.1);',
+        '    vec3 specular = color * brdf_Specular_GGX(N, L, V, 0.1);',
         '',
         '    vec3 outgoingLight = diffuse + specular;',
         '    return outgoingLight;',
@@ -467,6 +472,141 @@
         },
     });
     Models.Plane = Plane;
+
+    var BILLBOARD_VERT_SHADER_SOURCE = M([
+        'precision mediump float;',
+        '',
+        'uniform mat4 u_localMatrix;',
+        'uniform mat4 u_viewMatrix;',
+        'uniform mat4 u_projection;',
+        '',
+        'uniform vec3 u_cameraRight;',
+        'uniform vec3 u_cameraUp;',
+        'uniform vec2 u_size;',
+        '',
+        'varying vec2 v_position;',
+        '',
+        'attribute vec3 a_position;',
+        '',
+        'void main() {',
+        '    vec4 mdlPos = u_localMatrix * vec4(0, 0, 0, 1.0);',
+        '    vec3 vtxPos = mdlPos.xyz + u_cameraRight*a_position.x*u_size.x + u_cameraUp*a_position.y*u_size.y;',
+        '    v_position = a_position.xy;',
+        '    gl_Position = u_projection * u_viewMatrix * vec4(vtxPos, 1.0);',
+        '}',
+    ]);
+
+    var BILLBOARD_FRAG_SHADER_SOURCE = M([
+        'precision mediump float;',
+        '',
+        'uniform vec3 u_color;',
+        'varying vec2 v_position;',
+        '',
+        'void main() {',
+        '    float dist = length(v_position);',
+        '    if (dist > 1.0) discard;',
+        '    gl_FragColor = mix(vec4(u_color, 1.0), vec4(1.0, 1.0, 1.0, 1.0), 1.0 - dist);',
+        '}',
+    ]);
+
+    function createBillboardProgram(gl) {
+        var vertShader = GLUtils.compileShader(gl, BILLBOARD_VERT_SHADER_SOURCE, gl.VERTEX_SHADER);
+        var fragShader = GLUtils.compileShader(gl, BILLBOARD_FRAG_SHADER_SOURCE, gl.FRAGMENT_SHADER);
+
+        var prog = gl.createProgram();
+        gl.attachShader(prog, vertShader);
+        gl.attachShader(prog, fragShader);
+        gl.linkProgram(prog);
+
+        prog.uniforms = {};
+        prog.uniforms.projection = gl.getUniformLocation(prog, "u_projection");
+        prog.uniforms.localMatrix = gl.getUniformLocation(prog, "u_localMatrix");
+        prog.uniforms.viewMatrix = gl.getUniformLocation(prog, "u_viewMatrix");
+        prog.uniforms.cameraRight = gl.getUniformLocation(prog, "u_cameraRight");
+        prog.uniforms.cameraUp = gl.getUniformLocation(prog, "u_cameraUp");
+        prog.uniforms.size = gl.getUniformLocation(prog, "u_size");
+        prog.uniforms.color = gl.getUniformLocation(prog, "u_color");
+
+        prog.attribs = {};
+        prog.attribs.position = gl.getAttribLocation(prog, "a_position");
+
+        return prog;
+    }
+
+    var Billboard = new Class({
+        Name: 'Billboard',
+        Extends: BaseModel,
+
+        _buildModel: function() {
+            this.parent();
+
+            var gl = this._gl;
+
+            var verts = new Float32Array(VERT_N_ITEMS * 4);
+
+            verts[0]  = -1;
+            verts[1]  = -1;
+            verts[2]  = 0;
+            verts[3]  = 1;
+            verts[4]  = -1;
+            verts[5]  = 0;
+            verts[6]  = -1;
+            verts[7]  = 1;
+            verts[8]  = 0;
+            verts[9]  = 1;
+            verts[10] = 1;
+            verts[11] = 0;
+
+            var prim = {};
+            prim.color = [0.8, 0.8, 0.8];
+            prim.start = 0;
+            prim.count = 4;
+            prim.drawType = gl.TRIANGLE_STRIP;
+            this._primitives.push(prim);
+
+            this._setBuffers(verts, null);
+
+            this._renderProgram = createBillboardProgram(gl);
+            this._color = vec3.create();
+        },
+
+        _renderPrologue: function(ctx) {
+            var gl = this._gl;
+            var prog = ctx.currentProgram;
+            gl.uniformMatrix4fv(prog.uniforms.projection, false, ctx.projection);
+
+            var mdlMtx = mat4.create();
+            this.applyModelMatrix(mdlMtx);
+            gl.uniformMatrix4fv(prog.uniforms.localMatrix, false, mdlMtx);
+
+            gl.uniformMatrix4fv(prog.uniforms.viewMatrix, false, ctx.view);
+
+            var cameraRight = [ctx.view[0], ctx.view[4], ctx.view[8]];
+            gl.uniform3fv(prog.uniforms.cameraRight, cameraRight);
+            var cameraUp = [ctx.view[1], ctx.view[5], ctx.view[9]];
+            gl.uniform3fv(prog.uniforms.cameraUp, cameraUp);
+
+            gl.uniform2fv(prog.uniforms.size, [1, 1]);
+            gl.uniform3fv(prog.uniforms.color, this._color);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, this._vertBuffer);
+            gl.vertexAttribPointer(prog.attribs.position, 3, gl.FLOAT, false, 0, 0);
+            gl.enableVertexAttribArray(prog.attribs.position);
+        },
+        _renderEpilogue: function(ctx) {
+            var gl = this._gl;
+            var prog = ctx.currentProgram;
+            gl.disableVertexAttribArray(prog.attribs.position);
+        },
+
+        setPosition: function(pos) {
+            mat4.fromTranslation(this.localMatrix, pos);
+        },
+        setColor: function(color) {
+            vec3.copy(this._color, color);
+        },
+    });
+    Models.Billboard = Billboard;
 
     exports.Models = Models;
 

@@ -30,7 +30,7 @@
         initialize: function(gl) {
             this._gl = gl;
 
-            this._modelView = mat4.create();
+            this._view = mat4.create();
 
             this._projection = mat4.create();
             mat4.perspective(this._projection, Math.PI / 4, gl.viewportWidth / gl.viewportHeight, 0.2, 256);
@@ -38,14 +38,14 @@
             gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
 
             this._renderCtx = new RenderContext(gl);
-            this._renderCtx.modelView = this._modelView;
+            this._renderCtx.view = this._view;
             this._renderCtx.projection = this._projection;
 
             this.models = [];
         },
 
         setCamera: function(mat) {
-            mat4.copy(this._modelView, mat);
+            mat4.copy(this._view, mat);
         },
 
         attachModel: function(model) {
@@ -82,7 +82,7 @@
         gl.viewportHeight = canvas.height;
 
         var scene = new Scene(gl);
-        var light = new Light([50, 40, 50], [1, 1, 1], 1000, 5);
+        var light = new Light([50, 20, 50], [1, .5, 1], 1000, 5);
 
         var eh = new Models.Group();
         mat4.scale(eh.localMatrix, eh.localMatrix, [2, 2, 2]);
@@ -102,6 +102,10 @@
         plane.setMaterial([0.8, 0.8, 0.8]);
         mat4.scale(plane.localMatrix, plane.localMatrix, [50, 1, 50]);
         scene.attachModel(plane);
+
+        var light_bb = new Models.Billboard(gl);
+        light_bb.setColor(light.color);
+        scene.attachModel(light_bb);
 
         var keysDown = {};
         var SHIFT = 16;
@@ -128,7 +132,7 @@
                 cosY, sinX*sinY, -cosX*sinY, 0,
                 0, cosX, sinX, 0,
                 sinY, -sinX*cosY, cosX*cosY, 0,
-                0, 0, -50, 1
+                0, 0, -100, 1
             ];
             scene.setCamera(camera);
         }
@@ -164,6 +168,7 @@
 
             light.position[0] = Math.cos(t / 890) * 30;
             light.position[2] = Math.sin(t / 730) * 30;
+            light_bb.setPosition(light.position);
 
             if (isKeyDown('A'))
                 vT += 0.05;
