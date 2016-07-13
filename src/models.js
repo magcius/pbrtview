@@ -171,8 +171,13 @@
         '    float radius;',
         '};',
         '',
+        'struct Material {',
+        '    float roughness;',
+        '    vec3 diffuseColor;',
+        '};',
+        '',
         'uniform mat4 u_viewMatrix;',
-        'uniform vec3 u_diffuseColor;',
+        'uniform Material u_material;',
         'uniform Light u_light;',
         '',
         'varying vec4 v_positionWorld;',
@@ -233,8 +238,8 @@
         '    vec3 V = normalize(-v_positionEye.xyz);',
         '',
         '    float NoL = clamp(dot(N, L), 0.0, 1.0);',
-        '    vec3 diffuse = brdf_Diffuse_Lambert(u_diffuseColor);',
-        '    vec3 specular = brdf_Specular_GGX(N, L, V, 0.1);',
+        '    vec3 diffuse = brdf_Diffuse_Lambert(u_material.diffuseColor);',
+        '    vec3 specular = brdf_Specular_GGX(N, L, V, u_material.roughness);',
         '    vec3 irradiance = lightColor * NoL;',
         '    // Technically not energy-conserving, since we add the same light',
         '    // for both specular and diffuse, but it\'s minimal so we don\'t care...',
@@ -266,7 +271,8 @@
         prog.uniforms.localMatrix = gl.getUniformLocation(prog, "u_localMatrix");
         prog.uniforms.viewMatrix = gl.getUniformLocation(prog, "u_viewMatrix");
         prog.uniforms.normalMatrix = gl.getUniformLocation(prog, "u_normalMatrix");
-        prog.uniforms.diffuseColor = gl.getUniformLocation(prog, "u_diffuseColor");
+        prog.uniforms.diffuseColor = gl.getUniformLocation(prog, "u_material.diffuseColor");
+        prog.uniforms.roughness = gl.getUniformLocation(prog, "u_material.roughness");
 
         prog.uniforms.light = {};
         prog.uniforms.light.position = gl.getUniformLocation(prog, "u_light.pos");
@@ -299,13 +305,15 @@
             gl.uniform3fv(prog.uniforms.light.color, this._light.color);
             gl.uniform1f(prog.uniforms.light.radius, this._light.radius);
             gl.uniform3fv(prog.uniforms.diffuseColor, this._diffuseColor);
+            gl.uniform1f(prog.uniforms.roughness, this._roughness);
         },
 
         setLight: function(light) {
             this._light = light;
         },
-        setMaterial: function(diffuseColor) {
+        setMaterial: function(diffuseColor, roughness) {
             this._diffuseColor = diffuseColor;
+            this._roughness = roughness;
         },
     });
 
