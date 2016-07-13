@@ -140,7 +140,7 @@
         },
     });
 
-    var SINGLE_LIGHT_VERT_SHADER_SOURCE = M([
+    var PBR_LIGHT_VERT_SHADER_SOURCE = M([
         'precision mediump float;',
         '',
         'uniform mat4 u_localMatrix;',
@@ -163,7 +163,7 @@
         '}',
     ]);
 
-    var SINGLE_LIGHT_FRAG_SHADER_SOURCE = M([
+    var PBR_FRAG_SHADER_SOURCE = M([
         'precision mediump float;',
         '',
         'struct Light {',
@@ -260,9 +260,9 @@
         '}',
     ]);
 
-    function createSingleLightProgram(gl) {
-        var vertShader = GLUtils.compileShader(gl, SINGLE_LIGHT_VERT_SHADER_SOURCE, gl.VERTEX_SHADER);
-        var fragShader = GLUtils.compileShader(gl, SINGLE_LIGHT_FRAG_SHADER_SOURCE, gl.FRAGMENT_SHADER);
+    function createPBRProgram(gl) {
+        var vertShader = GLUtils.compileShader(gl, PBR_VERT_SHADER_SOURCE, gl.VERTEX_SHADER);
+        var fragShader = GLUtils.compileShader(gl, PBR_FRAG_SHADER_SOURCE, gl.FRAGMENT_SHADER);
 
         var prog = gl.createProgram();
         gl.attachShader(prog, vertShader);
@@ -295,8 +295,8 @@
         return prog;
     }
 
-    var SingleLightModel = new Class({
-        Name: 'SingleLightModel',
+    var PBRModel = new Class({
+        Name: 'PBRModel',
         Extends: BaseModel,
 
         _buildModel: function() {
@@ -344,7 +344,7 @@
 
     var JMDL = new Class({
         Name: 'JMDL',
-        Extends: SingleLightModel,
+        Extends: PBRModel,
 
         _buildModel: function(filename) {
             this.parent();
@@ -402,7 +402,7 @@
 
     var Plane = new Class({
         Name: 'Plane',
-        Extends: SingleLightModel,
+        Extends: PBRModel,
 
         _buildModel: function() {
             this.parent();
