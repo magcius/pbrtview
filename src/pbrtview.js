@@ -90,7 +90,7 @@
         eh_t.setMaterial([0.92, 0.92, 0.92], 0.1);
         eh.attachModel(eh_t);
         var eh_b = new Models.JMDL(gl, 'eh_b.jmdl');
-        eh_b.setMaterial([1.0, 0.4, 0.4], 0.05);
+        eh_b.setMaterial([1.0, 0.4, 0.4], 0.5);
         eh.attachModel(eh_b);
 
         eh.forEach(function(mdl) { mdl.setLight(light) });
@@ -98,7 +98,7 @@
 
         var plane = new Models.Plane(gl);
         plane.setLight(light);
-        plane.setMaterial([0.8, 0.8, 0.8], 0.5);
+        plane.setMaterial([1, 1, 1], 0.5);
         mat4.scale(plane.localMatrix, plane.localMatrix, [50, 1, 50]);
         scene.attachModel(plane);
 

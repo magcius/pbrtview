@@ -245,7 +245,7 @@
         '    // for both specular and diffuse, but it\'s minimal so we don\'t care...',
         '',
         '    // Crummy env lighting.',
-        '    vec3 indirectDiffuseIrradiance = vec3(0.25, 0.25, 0.25);',
+        '    vec3 indirectDiffuseIrradiance = vec3(0.5, 0.5, 0.5);',
         '',
         '    vec3 outgoingLight = ((directIrradiance + indirectDiffuseIrradiance) * diffuse) + (directIrradiance * specular);',
         '    return outgoingLight;',
