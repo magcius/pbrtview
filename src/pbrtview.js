@@ -121,6 +121,8 @@
         });
         var t = 0;
 
+        var Z = -100;
+        var vZ = 0;
         function updateCamera() {
             var x = P, y = T;
             var sinX = Math.sin(x);
@@ -131,7 +133,7 @@
                 cosY, sinX*sinY, -cosX*sinY, 0,
                 0, cosX, sinX, 0,
                 sinY, -sinX*cosY, cosX*cosY, 0,
-                0, 0, -100, 1
+                0, 0, Z, 1,
             ];
             scene.setCamera(camera);
         }
@@ -158,6 +160,10 @@
             vT += dx / 200;
             vP += dy / 200;
         });
+        canvas.addEventListener('wheel', function(e) {
+            vZ += e.deltaY * -.8;
+            e.preventDefault();
+        });
 
         var T = 0.35, P = 0.15;
 
@@ -180,11 +186,13 @@
 
             vP = absclamp(vP, 2);
             vT = absclamp(vT, 2);
-            var drag = dragging ? 0.94 : 0.98;
+            var drag = dragging ? 0.92 : 0.96;
             P += vP / 10; vP *= drag;
-            T += vT / 10; vT *= drag;
             if (P < 0.04) P = 0.04, vP = 0;
             if (P > 1.50) P = 1.50, vP = 0;
+            T += vT / 10; vT *= drag;
+            Z += vZ; vZ *= 0.8;
+            if (Z > -10) Z = -10, vZ = 0;
             updateCamera();
 
             scene.update();
