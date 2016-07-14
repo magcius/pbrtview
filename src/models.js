@@ -13,13 +13,188 @@
     // A dumb hack to have "multiline strings".
     function M(X) { return X.join('\n'); }
 
+    var RenderContext = new Class({
+        Name: 'RenderContext',
+
+        initialize: function(gl) {
+            this._gl = gl;
+
+            this.currentProgram = null;
+            this.forceMaterial = true;
+        },
+
+        setProgram: function(prog) {
+            var gl = this._gl;
+
+            this.currentProgram = prog;
+            gl.useProgram(this.currentProgram);
+        },
+
+        setMaterial: function(material) {
+            if (this.forceMaterial) return;
+
+            material.renderPrologue(this);
+        },
+    });
+
+    // The main renderer.
+    var Scene = new Class({
+        initialize: function(gl) {
+            this._gl = gl;
+
+            this._view = mat4.create();
+
+            this._projection = mat4.create();
+            mat4.perspective(this._projection, Math.PI / 4, gl.viewportWidth / gl.viewportHeight, 0.2, 256);
+
+            this._renderCtx = new RenderContext(gl);
+            this._renderCtx.view = this._view;
+            this._renderCtx.projection = this._projection;
+
+            this.models = [];
+        },
+
+        setCamera: function(mat) {
+            mat4.copy(this._view, mat);
+        },
+        setLights: function(lights) {
+            this._renderCtx.lights = lights;
+        },
+
+        attachModel: function(model) {
+            this.models.push(model);
+        },
+
+        _render: function() {
+            var gl = this._gl;
+
+            // Shadow map.
+            var ctx = this._renderCtx;
+            ctx.lights.forEach(function(light) {
+                light.renderShadowMapPrologue(ctx);
+
+                ctx.forceMaterial = true;
+                this.models.forEach(function(model) {
+                    model.render(this._renderCtx);
+                }.bind(this));
+                ctx.forceMaterial = false;
+
+                light.renderShadowMapEpilogue();
+            }.bind(this));
+            this._renderCtx.view = this._view;
+
+            // Normal render.
+            gl.enable(gl.DEPTH_TEST);
+            gl.clearColor(0.88, 0.88, 0.88, 1);
+            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+            gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
+
+            this.models.forEach(function(model) {
+                model.render(ctx);
+            }.bind(this));
+        },
+        update: function() {
+            this._render();
+        },
+    });
+    Models.Scene = Scene;
+
+    function createShadowMapProgram(gl) {
+        var prog = GLUtils.compileProgram(gl,
+// Common 
+M([
+'precision mediump float;',
+'',
+'uniform mat4 u_localMatrix;',
+'uniform mat4 u_viewMatrix;',
+'uniform mat4 u_projection;',
+]),
+// Vert
+M([
+'attribute vec3 a_position;',
+'',
+'void main() {',
+'    vec4 positionWorld = u_localMatrix * vec4(a_position, 1.0);',
+'    vec4 positionEye = u_viewMatrix * positionWorld;',
+'    gl_Position = u_projection * positionEye;',
+'}',
+]),
+// Frag
+M([
+'void main() {',
+'    float depth = (gl_FragCoord.z / gl_FragCoord.w) * 0.01;',
+'    vec3 color = vec3(depth);',
+'    gl_FragColor = vec4(color, 1.0);',
+'}',
+]));
+
+        prog.uniforms = {};
+        prog.uniforms.projection = gl.getUniformLocation(prog, "u_projection");
+        prog.uniforms.localMatrix = gl.getUniformLocation(prog, "u_localMatrix");
+        prog.uniforms.viewMatrix = gl.getUniformLocation(prog, "u_viewMatrix");
+
+        prog.attribs = {};
+        prog.attribs.position = gl.getAttribLocation(prog, "a_position");
+
+        return prog;
+    }
+
+    var SHADOW_MAP_SIZE = 512;
     var Light = new Class({
         Name: 'Light',
 
         initialize: function(gl, position, color, radius) {
+            this._gl = gl;
+
             this.position = position;
             this.color = color;
             this.radius = radius;
+
+            this._shadowMapColor = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, this._shadowMapColor);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, 0, gl.RGB, gl.UNSIGNED_BYTE, null);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+
+            this._shadowMapRenderbuffer = gl.createRenderbuffer();
+            gl.bindRenderbuffer(gl.RENDERBUFFER, this._shadowMapRenderbuffer);
+            gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
+
+            this._shadowMapFramebuffer = gl.createFramebuffer();
+            gl.bindFramebuffer(gl.FRAMEBUFFER, this._shadowMapFramebuffer);
+            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this._shadowMapColor, 0);
+            gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, this._shadowMapRenderbuffer);
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+            this._shadowMapProgram = createShadowMapProgram(gl);
+
+            this._shadowMapProjection = mat4.create();
+            mat4.perspective(this._shadowMapProjection, Math.PI / 4, 1, 0.2, 256);
+
+            this._shadowMapView = mat4.create();
+        },
+
+        renderShadowMapPrologue: function(ctx) {
+            var gl = this._gl;
+            ctx.setProgram(this._shadowMapProgram);
+
+            gl.bindFramebuffer(gl.FRAMEBUFFER, this._shadowMapFramebuffer);
+            gl.viewport(0, 0, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
+            gl.clearColor(1, 1, 1, 1);
+            gl.clearDepth(1);
+
+            var prog = ctx.currentProgram;
+            gl.uniformMatrix4fv(prog.uniforms.projection, false, this._shadowMapProjection);
+
+            var pos = this.position;
+            mat4.lookAt(this._shadowMapView, pos, [0, 0, 0], [0, 1, 0]);
+            gl.uniformMatrix4fv(prog.uniforms.viewMatrix, false, this._shadowMapView);
+        },
+
+        renderShadowMapEpilogue: function() {
+            var gl = this._gl;
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         },
     });
     Models.Light = Light;
@@ -99,37 +274,36 @@
         },
 
         _renderPrologue: function(ctx) {
-            ctx.setMaterial(this._material);
-
             var gl = this._gl;
+
             var prog = ctx.currentProgram;
-            gl.uniformMatrix4fv(prog.uniforms.projection, false, ctx.projection);
 
             var mdlMtx = mat4.create();
             this.applyModelMatrix(mdlMtx);
             gl.uniformMatrix4fv(prog.uniforms.localMatrix, false, mdlMtx);
             var mtx = mat4.create();
 
-            gl.uniformMatrix4fv(prog.uniforms.viewMatrix, false, ctx.view);
-
             mat4.multiply(mtx, ctx.view, mdlMtx);
             mat4.invert(mtx, mtx);
             mat4.transpose(mtx, mtx);
             gl.uniformMatrix4fv(prog.uniforms.normalMatrix, false, mtx);
 
-            gl.bindBuffer(gl.ARRAY_BUFFER, this._nrmlBuffer);
-            gl.vertexAttribPointer(prog.attribs.normal, 3, gl.FLOAT, false, 0, 0);
-            gl.enableVertexAttribArray(prog.attribs.normal);
-
             gl.bindBuffer(gl.ARRAY_BUFFER, this._vertBuffer);
             gl.vertexAttribPointer(prog.attribs.position, 3, gl.FLOAT, false, 0, 0);
             gl.enableVertexAttribArray(prog.attribs.position);
+
+            if (prog.attribs.normal) {
+                gl.bindBuffer(gl.ARRAY_BUFFER, this._nrmlBuffer);
+                gl.vertexAttribPointer(prog.attribs.normal, 3, gl.FLOAT, false, 0, 0);
+                gl.enableVertexAttribArray(prog.attribs.normal);
+            }
         },
         _renderEpilogue: function(ctx) {
             var gl = this._gl;
             var prog = ctx.currentProgram;
             gl.disableVertexAttribArray(prog.attribs.position);
-            gl.disableVertexAttribArray(prog.attribs.normal);
+            if (prog.attribs.normal)
+                gl.disableVertexAttribArray(prog.attribs.normal);
         },
         _renderPrimitive: function(ctx, prim) {
             var gl = this._gl;
@@ -144,6 +318,7 @@
             if (this._loaded === false)
                 return;
 
+            ctx.setMaterial(this._material);
             this._renderPrologue(ctx);
             this._primitives.forEach(function(prim) {
                 this._renderPrimitive(ctx, prim);
@@ -166,6 +341,7 @@ M([
 'struct Light {',
 '    vec3 pos, color;',
 '    float radius;',
+'    mat4 view, projection;',
 '};',
 '',
 'struct Material {',
@@ -177,6 +353,8 @@ M([
 '',
 '#define NUM_LIGHTS 4',
 'uniform Light u_lights[NUM_LIGHTS];',
+'// Workaround ANGLE not supporting samplers in structs...',
+'uniform sampler2D u_lights_shadowMap[NUM_LIGHTS];',
 '',
 'varying vec4 v_positionWorld;',
 'varying vec4 v_positionEye;',
@@ -236,7 +414,17 @@ M([
 '    return F * G * D;',
 '}',
 '',
-'vec3 light_getReflectedLight(const in Light light) {',
+'vec3 light_getShadow(const in Light light, sampler2D shadowMap) {',
+'    vec4 lightWorldPos = light.view * v_positionWorld;',
+'    vec4 lightClipPos = light.projection * lightWorldPos;',
+'    vec2 lightUV = lightClipPos.xy / lightClipPos.w;',
+'    vec3 shadowColor = normalize(vec3(lightWorldPos.x, 0.0, lightWorldPos.y));',
+'    return shadowColor;',
+// '    float lightDepth = texture2D(shadowMap, lightUV).r;',
+// '    return lightDepth;',
+'}',
+'',
+'vec3 light_getReflectedLight(const in Light light, sampler2D shadowMap) {',
 '    vec3 lightPosEye = (u_viewMatrix * vec4(light.pos, 1.0)).xyz;',
 '    vec3 lightToModel = lightPosEye - v_positionEye.xyz;',
 '    vec3 lightColor = light.color * attenuate(light, length(lightToModel));',
@@ -259,8 +447,9 @@ M([
 'void main() {',
 '    vec3 directReflectedLight = vec3(0.0);',
 '',
-'    for (int i = 0; i < NUM_LIGHTS; i++)',
-'        directReflectedLight += light_getReflectedLight(u_lights[i]);',
+'    for (int i = 0; i < NUM_LIGHTS; i++) {',
+'        directReflectedLight += light_getReflectedLight(u_lights[i], u_lights_shadowMap[i]);',
+'    }',
 '',
 '    vec3 indirectDiffuseIrradiance = vec3(0.5, 0.5, 0.5);',
 '    vec3 indirectReflectedLight = indirectDiffuseIrradiance * u_material.diffuseColor;',
@@ -290,6 +479,9 @@ M([
             light.position = gl.getUniformLocation(prog, "u_lights["+i+"].pos");
             light.color = gl.getUniformLocation(prog, "u_lights["+i+"].color");
             light.radius = gl.getUniformLocation(prog, "u_lights["+i+"].radius");
+            light.projection = gl.getUniformLocation(prog, "u_lights["+i+"].projection");
+            light.view = gl.getUniformLocation(prog, "u_lights["+i+"].view");
+            light.shadowMap = gl.getUniformLocation(prog, "u_lights_shadowMap["+i+"]");
             prog.uniforms.lights.push(light);
         }
 
@@ -313,14 +505,24 @@ M([
             ctx.setProgram(this._renderProgram);
             var prog = ctx.currentProgram;
 
-            function setLight(glLight, mLight) {
+            gl.uniformMatrix4fv(prog.uniforms.projection, false, ctx.projection);
+            gl.uniformMatrix4fv(prog.uniforms.viewMatrix, false, ctx.view);
+
+            function setLight(glLight, mLight, i) {
                 gl.uniform3fv(glLight.position, mLight.position);
                 gl.uniform3fv(glLight.color, mLight.color);
                 gl.uniform1f(glLight.radius, mLight.radius);
+
+                gl.activeTexture(gl.TEXTURE0 + i);
+                gl.bindTexture(gl.TEXTURE_2D, mLight._shadowMapColor);
+                gl.uniform1i(glLight.shadowMap, i);
+
+                gl.uniformMatrix4fv(glLight.projection, false, mLight._shadowMapProjection);
+                gl.uniformMatrix4fv(glLight.view, false, mLight._shadowMapView);
             }
 
-            ctx.lights.forEach(function(mLight, i) {
-                setLight(prog.uniforms.lights[i], mLight);
+            ctx.lights.slice(0, 1).forEach(function(mLight, i) {
+                setLight(prog.uniforms.lights[i], mLight, i);
             });
 
             gl.uniform3fv(prog.uniforms.diffuseColor, this._diffuseColor);
@@ -499,6 +701,34 @@ M([
         return prog;
     }
 
+    var BillboardMaterial = new Class({
+        Name: 'BillboardMaterial',
+
+        initialize: function(gl) {
+            this._gl = gl;
+            this._renderProgram = createBillboardProgram(gl);
+            this._color = vec3.create();
+        },
+
+        renderPrologue: function(ctx) {
+            var gl = this._gl;
+
+            ctx.setProgram(this._renderProgram);
+            var prog = ctx.currentProgram;
+
+            gl.uniformMatrix4fv(prog.uniforms.projection, false, ctx.projection);
+            gl.uniformMatrix4fv(prog.uniforms.viewMatrix, false, ctx.view);
+
+            gl.uniform2fv(prog.uniforms.size, [1, 1]);
+            gl.uniform3fv(prog.uniforms.color, this._color);
+        },
+
+        setColor: function(color) {
+            vec3.copy(this._color, color);
+        },
+    });
+    Models.PBRMaterial = PBRMaterial;
+
     var Billboard = new Class({
         Name: 'Billboard',
         Extends: BaseModel,
@@ -531,29 +761,20 @@ M([
 
             this._setBuffers(verts, null);
 
-            this._renderProgram = createBillboardProgram(gl);
-            this._color = vec3.create();
+            this.setMaterial(new BillboardMaterial(gl));
         },
 
         _renderPrologue: function(ctx) {
             var gl = this._gl;
-            ctx.setProgram(this._renderProgram);
-
             var prog = ctx.currentProgram;
-            gl.uniformMatrix4fv(prog.uniforms.projection, false, ctx.projection);
-
-            var mdlMtx = mat4.create();
-            this.applyModelMatrix(mdlMtx);
-            gl.uniformMatrix4fv(prog.uniforms.localMatrix, false, mdlMtx);
-
-            gl.uniformMatrix4fv(prog.uniforms.viewMatrix, false, ctx.view);
-
-            gl.uniform2fv(prog.uniforms.size, [1, 1]);
-            gl.uniform3fv(prog.uniforms.color, this._color);
 
             gl.bindBuffer(gl.ARRAY_BUFFER, this._vertBuffer);
             gl.vertexAttribPointer(prog.attribs.position, 3, gl.FLOAT, false, 0, 0);
             gl.enableVertexAttribArray(prog.attribs.position);
+
+            var mdlMtx = mat4.create();
+            this.applyModelMatrix(mdlMtx);
+            gl.uniformMatrix4fv(prog.uniforms.localMatrix, false, mdlMtx);
         },
         _renderEpilogue: function(ctx) {
             var gl = this._gl;
@@ -565,7 +786,7 @@ M([
             mat4.fromTranslation(this.localMatrix, pos);
         },
         setColor: function(color) {
-            vec3.copy(this._color, color);
+            this._material.setColor(color);
         },
     });
     Models.Billboard = Billboard;

@@ -8,79 +8,13 @@
         return clamp(x, -lim, lim);
     }
 
-    var RenderContext = new Class({
-        Name: 'RenderContext',
-
-        initialize: function(gl) {
-            this._gl = gl;
-
-            this.currentProgram = null;
-        },
-
-        setProgram: function(prog) {
-            var gl = this._gl;
-
-            this.currentProgram = prog;
-            gl.useProgram(this.currentProgram);
-        },
-
-        setMaterial: function(material) {
-            material.renderPrologue(this);
-        },
-    });
-
-    // The main renderer.
-    var Scene = new Class({
-        initialize: function(gl) {
-            this._gl = gl;
-
-            this._view = mat4.create();
-
-            this._projection = mat4.create();
-            mat4.perspective(this._projection, Math.PI / 4, gl.viewportWidth / gl.viewportHeight, 0.2, 256);
-
-            gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
-
-            this._renderCtx = new RenderContext(gl);
-            this._renderCtx.view = this._view;
-            this._renderCtx.projection = this._projection;
-
-            this.models = [];
-        },
-
-        setCamera: function(mat) {
-            mat4.copy(this._view, mat);
-        },
-        setLights: function(lights) {
-            this._renderCtx.lights = lights;
-        },
-
-        attachModel: function(model) {
-            this.models.push(model);
-        },
-
-        _render: function() {
-            var gl = this._gl;
-
-            gl.enable(gl.DEPTH_TEST);
-            gl.clearColor(0.88, 0.88, 0.88, 1);
-            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-            this.models.forEach(function(model) {
-                model.render(this._renderCtx);
-            }.bind(this));
-        },
-        update: function() {
-            this._render();
-        },
-    });
-
     function createViewer(canvas) {
         var gl = canvas.getContext("webgl", { alpha: false });
 
         gl.viewportWidth = canvas.width;
         gl.viewportHeight = canvas.height;
 
-        var scene = new Scene(gl);
+        var scene = new Models.Scene(gl);
         var lights = [
             new Models.Light(gl, [50, 30, 50], [1, .4, .4], 100),
             new Models.Light(gl, [50, 40, 50], [.4, 1, .4], 150),
