@@ -124,7 +124,7 @@ M([
 // Frag
 M([
 'void main() {',
-'    float depth = (gl_FragCoord.z / gl_FragCoord.w) * 0.01;',
+'    float depth = (gl_FragCoord.z / gl_FragCoord.w) * 0.005;',
 '    vec3 color = vec3(depth);',
 '    gl_FragColor = vec4(color, 1.0);',
 '}',
@@ -444,10 +444,10 @@ M([
 '    vec4 lightEyePos = light.projection * lightWorldPos;',
 '    vec2 lightDevice = (lightEyePos.xy / lightEyePos.w);',
 '    vec2 lightUV = lightDevice * 0.5 + 0.5;',
-'    float shadowBias = 0.01;',
+'    float shadowBias = 0.008;',
 '    float lightDepth = texture2D(shadowMap, lightUV).r + shadowBias;',
-'    float normalDepth = (lightEyePos.z * 0.01);',
-'    return smoothstep(normalDepth - 0.1, normalDepth + 0.1, lightDepth);',
+'    float normalDepth = (lightEyePos.w * 0.005);',
+'    return step(normalDepth, lightDepth);',
 '}',
 '',
 'vec3 light_getReflectedLight(const in Light light, sampler2D shadowMap) {',

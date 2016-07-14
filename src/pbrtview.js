@@ -104,9 +104,9 @@
 
         var scene = new Models.Scene(gl);
         var lights = [
-            new Models.Light(gl, [50, 50, 50], [1, .6, .6], 150),
-            new Models.Light(gl, [50, 45, 50], [.6, 1, .6], 175),
-            new Models.Light(gl, [50, 55, 50], [.6, .6, 1], 200),
+            new Models.Light(gl, [50, 50, 50], [1, .6, .6], 100),
+            new Models.Light(gl, [50, 45, 50], [.6, 1, .6], 125),
+            new Models.Light(gl, [50, 55, 50], [.6, .6, 1], 150),
         ];
         scene.setLights(lights);
 
