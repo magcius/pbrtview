@@ -459,8 +459,6 @@ M([
 'uniform mat4 u_viewMatrix;',
 'uniform mat4 u_projection;',
 '',
-'uniform vec3 u_cameraRight;',
-'uniform vec3 u_cameraUp;',
 'uniform vec2 u_size;',
 'uniform vec3 u_color;',
 '',
@@ -472,7 +470,9 @@ M([
 '',
 'void main() {',
 '    vec4 mdlPos = u_localMatrix * vec4(0, 0, 0, 1.0);',
-'    vec3 vtxPos = mdlPos.xyz + u_cameraRight*a_position.x*u_size.x + u_cameraUp*a_position.y*u_size.y;',
+'    vec3 cameraRight = vec3(u_viewMatrix[0][0], u_viewMatrix[1][0], u_viewMatrix[2][0]);',
+'    vec3 cameraUp = vec3(u_viewMatrix[0][1], u_viewMatrix[1][1], u_viewMatrix[2][1]);',
+'    vec3 vtxPos = mdlPos.xyz + cameraRight*a_position.x*u_size.x + cameraUp*a_position.y*u_size.y;',
 '    v_position = a_position.xy;',
 '    gl_Position = u_projection * u_viewMatrix * vec4(vtxPos, 1.0);',
 '}',
@@ -490,8 +490,6 @@ M([
         prog.uniforms.projection = gl.getUniformLocation(prog, "u_projection");
         prog.uniforms.localMatrix = gl.getUniformLocation(prog, "u_localMatrix");
         prog.uniforms.viewMatrix = gl.getUniformLocation(prog, "u_viewMatrix");
-        prog.uniforms.cameraRight = gl.getUniformLocation(prog, "u_cameraRight");
-        prog.uniforms.cameraUp = gl.getUniformLocation(prog, "u_cameraUp");
         prog.uniforms.size = gl.getUniformLocation(prog, "u_size");
         prog.uniforms.color = gl.getUniformLocation(prog, "u_color");
 
@@ -549,11 +547,6 @@ M([
             gl.uniformMatrix4fv(prog.uniforms.localMatrix, false, mdlMtx);
 
             gl.uniformMatrix4fv(prog.uniforms.viewMatrix, false, ctx.view);
-
-            var cameraRight = [ctx.view[0], ctx.view[4], ctx.view[8]];
-            gl.uniform3fv(prog.uniforms.cameraRight, cameraRight);
-            var cameraUp = [ctx.view[1], ctx.view[5], ctx.view[9]];
-            gl.uniform3fv(prog.uniforms.cameraUp, cameraUp);
 
             gl.uniform2fv(prog.uniforms.size, [1, 1]);
             gl.uniform3fv(prog.uniforms.color, this._color);
