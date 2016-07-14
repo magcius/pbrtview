@@ -19,6 +19,23 @@
 
     GLUtils.compileShader = compileShader;
 
+    function compileProgram(gl, common, vert, frag) {
+        var fullVert = common + '\n\n\n' + vert;
+        var fullFrag = common + '\n\n\n' + frag;
+
+        var vertShader = GLUtils.compileShader(gl, fullVert, gl.VERTEX_SHADER);
+        var fragShader = GLUtils.compileShader(gl, fullFrag, gl.FRAGMENT_SHADER);
+
+        var prog = gl.createProgram();
+        gl.attachShader(prog, vertShader);
+        gl.attachShader(prog, fragShader);
+        gl.linkProgram(prog);
+
+        return prog;
+    }
+
+    GLUtils.compileProgram = compileProgram;
+
     exports.GLUtils = GLUtils;
 
 })(window);

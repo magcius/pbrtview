@@ -7,10 +7,6 @@
 
     var TAU = Math.PI * 2;
 
-    var GREEN  = [0.6, 0.8, 0.2];
-    var PURPLE = [0.4, 0.2, 0.8];
-    var PINK   = [1.0, 0.2, 0.8];
-
     var VERT_N_ITEMS = 3;
     var VERT_N_BYTES = VERT_N_ITEMS * Float32Array.BYTES_PER_ELEMENT;
 
@@ -156,134 +152,123 @@
         },
     });
 
-    var PBR_VERT_SHADER_SOURCE = M([
-        'precision mediump float;',
-        '',
-        'uniform mat4 u_localMatrix;',
-        'uniform mat4 u_viewMatrix;',
-        'uniform mat4 u_normalMatrix;',
-        'uniform mat4 u_projection;',
-        '',
-        'attribute vec3 a_position;',
-        'attribute vec3 a_normal;',
-        '',
-        'varying vec4 v_positionWorld;',
-        'varying vec4 v_positionEye;',
-        'varying vec4 v_normalEye;',
-        '',
-        'void main() {',
-        '    v_positionWorld = u_localMatrix * vec4(a_position, 1.0);',
-        '    v_positionEye = u_viewMatrix * v_positionWorld;',
-        '    v_normalEye = u_normalMatrix * vec4(a_normal, 1.0);',
-        '    gl_Position = u_projection * v_positionEye;',
-        '}',
-    ]);
-
-    var PBR_FRAG_SHADER_SOURCE = M([
-        'precision mediump float;',
-        '',
-        'struct Light {',
-        '    vec3 pos, color;',
-        '    float radius;',
-        '};',
-        '',
-        'struct Material {',
-        '    float roughness;',
-        '    vec3 diffuseColor;',
-        '};',
-        '',
-        'uniform mat4 u_viewMatrix;',
-        'uniform Material u_material;',
-        '',
-        '#define NUM_LIGHTS 4',
-        'uniform Light u_lights[NUM_LIGHTS];',
-        '',
-        'varying vec4 v_positionWorld;',
-        'varying vec4 v_positionEye;',
-        'varying vec4 v_normalEye;',
-        '',
-        'float attenuate(const in Light light, const in float dist) {',
-        '    float att = clamp(1.0 - dist/light.radius, 0.0, 1.0);',
-        '    return att * att;',
-        '}',
-        '',
-        'vec3 brdf_F_Schlick(const in vec3 L, const in vec3 H, const in vec3 specularColor) {',
-        '    float LoH = clamp(dot(L, H), 0.0, 1.0);',
-        '    float fresnel = pow(1.0 - LoH, 5.0);',
-        '    return (1.0 - fresnel) * specularColor + fresnel;',
-        '}',
-        '',
-        'float brdf_G_GGX_Smith(const in vec3 N, const in vec3 L, const in vec3 V, const in float roughness) {',
-        '    // GGX / Smith from s2013_pbs_epic_notes_v2.pdf',
-        '    float alpha = roughness * roughness;',
-        '    float k = alpha * 0.5;',
-        '',
-        '    float NoL = clamp(dot(N, L), 0.0, 1.0);',
-        '    float NoV = clamp(dot(N, V), 0.0, 1.0);',
-        '    float G1L = 1.0 / (NoL * (1.0 - k) + k);',
-        '    float G1V = 1.0 / (NoV * (1.0 - k) + k);',
-        '    return (G1L * G1V) / (4.0);', 
-        '}',
-        '',
-        'float brdf_D_GGX(const in vec3 N, const in vec3 H, const in float roughness) {',
-        '    // Use the Disney GGX/Troughbridge-Reitz. Stolen from s2013_pbs_epic_notes_v2.pdf',
-        '    float alpha = roughness * roughness;',
-        '    float alpha2 = alpha * alpha;',
-        '    float NoH = clamp(dot(N, H), 0.0, 1.0);',
-        '    float denom = ((NoH * NoH) * (alpha2 - 1.0)) + 1.0;',
-        '    return alpha2 / (denom * denom);',
-        '}',
-        '',
-        'vec3 brdf_Specular_GGX(const in vec3 N, const in vec3 L, const in vec3 V, const in float roughness) {',
-        '    vec3 H = normalize(L + V);',
-        '    vec3 F = brdf_F_Schlick(L, H, vec3(0.04, 0.04, 0.04));',
-        '    float G = brdf_G_GGX_Smith(N, L, V, roughness);',
-        '    float D = brdf_D_GGX(N, H, roughness);',
-        '    return F * G * D;',
-        '}',
-        '',
-        'vec3 light_getReflectedLight(const in Light light) {',
-        '    vec3 lightPosEye = (u_viewMatrix * vec4(light.pos, 1.0)).xyz;',
-        '    vec3 lightToModel = lightPosEye - v_positionEye.xyz;',
-        '    vec3 lightColor = light.color * attenuate(light, length(lightToModel));',
-        '',
-        '    vec3 L = normalize(lightToModel);',
-        '    vec3 N = normalize(v_normalEye.xyz);',
-        '    vec3 V = normalize(-v_positionEye.xyz);',
-        '',
-        '    float NoL = clamp(dot(N, L), 0.0, 1.0);',
-        '    vec3 diffuse = u_material.diffuseColor;',
-        '    vec3 specular = brdf_Specular_GGX(N, L, V, u_material.roughness);',
-        '    vec3 directIrradiance = lightColor * NoL;',
-        '',
-        '    // Technically not energy-conserving, since we add the same light',
-        '    // for both specular and diffuse, but it\'s minimal so we don\'t care...',
-        '    vec3 outgoingLight = (directIrradiance * diffuse) + (directIrradiance * specular);',
-        '    return outgoingLight;',
-        '}',
-        '',
-        'void main() {',
-        '    vec3 directReflectedLight = vec3(0.0);',
-        '',
-        '    for (int i = 0; i < NUM_LIGHTS; i++)',
-        '        directReflectedLight += light_getReflectedLight(u_lights[i]);',
-        '',
-        '    vec3 indirectDiffuseIrradiance = vec3(0.5, 0.5, 0.5);',
-        '    vec3 indirectReflectedLight = indirectDiffuseIrradiance * u_material.diffuseColor;',
-        '    vec3 color = directReflectedLight + indirectReflectedLight;',
-        '',
-        '    gl_FragColor = vec4(color, 1.0);',
-        '}',
-    ]);
-
     function createPBRProgram(gl) {
-        var vertShader = GLUtils.compileShader(gl, PBR_VERT_SHADER_SOURCE, gl.VERTEX_SHADER);
-        var fragShader = GLUtils.compileShader(gl, PBR_FRAG_SHADER_SOURCE, gl.FRAGMENT_SHADER);
-
-        var prog = gl.createProgram();
-        gl.attachShader(prog, vertShader);
-        gl.attachShader(prog, fragShader);
-        gl.linkProgram(prog);
+        var prog = GLUtils.compileProgram(gl,
+// Common 
+M([
+'precision mediump float;',
+'',
+'uniform mat4 u_localMatrix;',
+'uniform mat4 u_viewMatrix;',
+'uniform mat4 u_normalMatrix;',
+'uniform mat4 u_projection;',
+'',
+'struct Light {',
+'    vec3 pos, color;',
+'    float radius;',
+'};',
+'',
+'struct Material {',
+'    float roughness;',
+'    vec3 diffuseColor;',
+'};',
+'',
+'uniform Material u_material;',
+'',
+'#define NUM_LIGHTS 4',
+'uniform Light u_lights[NUM_LIGHTS];',
+'',
+'varying vec4 v_positionWorld;',
+'varying vec4 v_positionEye;',
+'varying vec4 v_normalEye;',
+]),
+// Vert
+M([
+'attribute vec3 a_position;',
+'attribute vec3 a_normal;',
+'',
+'void main() {',
+'    v_positionWorld = u_localMatrix * vec4(a_position, 1.0);',
+'    v_positionEye = u_viewMatrix * v_positionWorld;',
+'    v_normalEye = u_normalMatrix * vec4(a_normal, 1.0);',
+'    gl_Position = u_projection * v_positionEye;',
+'}',
+]),
+// Frag
+M([
+'float attenuate(const in Light light, const in float dist) {',
+'    float att = clamp(1.0 - dist/light.radius, 0.0, 1.0);',
+'    return att * att;',
+'}',
+'',
+'vec3 brdf_F_Schlick(const in vec3 L, const in vec3 H, const in vec3 specularColor) {',
+'    float LoH = clamp(dot(L, H), 0.0, 1.0);',
+'    float fresnel = pow(1.0 - LoH, 5.0);',
+'    return (1.0 - fresnel) * specularColor + fresnel;',
+'}',
+'',
+'float brdf_G_GGX_Smith(const in vec3 N, const in vec3 L, const in vec3 V, const in float roughness) {',
+'    // GGX / Smith from s2013_pbs_epic_notes_v2.pdf',
+'    float alpha = roughness * roughness;',
+'    float k = alpha * 0.5;',
+'',
+'    float NoL = clamp(dot(N, L), 0.0, 1.0);',
+'    float NoV = clamp(dot(N, V), 0.0, 1.0);',
+'    float G1L = 1.0 / (NoL * (1.0 - k) + k);',
+'    float G1V = 1.0 / (NoV * (1.0 - k) + k);',
+'    return (G1L * G1V) / (4.0);', 
+'}',
+'',
+'float brdf_D_GGX(const in vec3 N, const in vec3 H, const in float roughness) {',
+'    // Use the Disney GGX/Troughbridge-Reitz. Stolen from s2013_pbs_epic_notes_v2.pdf',
+'    float alpha = roughness * roughness;',
+'    float alpha2 = alpha * alpha;',
+'    float NoH = clamp(dot(N, H), 0.0, 1.0);',
+'    float denom = ((NoH * NoH) * (alpha2 - 1.0)) + 1.0;',
+'    return alpha2 / (denom * denom);',
+'}',
+'',
+'vec3 brdf_Specular_GGX(const in vec3 N, const in vec3 L, const in vec3 V, const in float roughness) {',
+'    vec3 H = normalize(L + V);',
+'    vec3 F = brdf_F_Schlick(L, H, vec3(0.04, 0.04, 0.04));',
+'    float G = brdf_G_GGX_Smith(N, L, V, roughness);',
+'    float D = brdf_D_GGX(N, H, roughness);',
+'    return F * G * D;',
+'}',
+'',
+'vec3 light_getReflectedLight(const in Light light) {',
+'    vec3 lightPosEye = (u_viewMatrix * vec4(light.pos, 1.0)).xyz;',
+'    vec3 lightToModel = lightPosEye - v_positionEye.xyz;',
+'    vec3 lightColor = light.color * attenuate(light, length(lightToModel));',
+'',
+'    vec3 L = normalize(lightToModel);',
+'    vec3 N = normalize(v_normalEye.xyz);',
+'    vec3 V = normalize(-v_positionEye.xyz);',
+'',
+'    float NoL = clamp(dot(N, L), 0.0, 1.0);',
+'    vec3 diffuse = u_material.diffuseColor;',
+'    vec3 specular = brdf_Specular_GGX(N, L, V, u_material.roughness);',
+'    vec3 directIrradiance = lightColor * NoL;',
+'',
+'    // Technically not energy-conserving, since we add the same light',
+'    // for both specular and diffuse, but it\'s minimal so we don\'t care...',
+'    vec3 outgoingLight = (directIrradiance * diffuse) + (directIrradiance * specular);',
+'    return outgoingLight;',
+'}',
+'',
+'void main() {',
+'    vec3 directReflectedLight = vec3(0.0);',
+'',
+'    for (int i = 0; i < NUM_LIGHTS; i++)',
+'        directReflectedLight += light_getReflectedLight(u_lights[i]);',
+'',
+'    vec3 indirectDiffuseIrradiance = vec3(0.5, 0.5, 0.5);',
+'    vec3 indirectReflectedLight = indirectDiffuseIrradiance * u_material.diffuseColor;',
+'    vec3 color = directReflectedLight + indirectReflectedLight;',
+'',
+'    gl_FragColor = vec4(color, 1.0);',
+'}',
+]));
 
         prog.uniforms = {};
         prog.uniforms.projection = gl.getUniformLocation(prog, "u_projection");
@@ -405,7 +390,6 @@
             offs += 4 * 3 * 3 * nface;
 
             var prim = {};
-            prim.color = [0.92, 0.92, 0.92];
             prim.start = 0;
             prim.count = nface * 3;
             prim.drawType = gl.TRIANGLES;
@@ -455,7 +439,6 @@
             nrmls[11] = 0;
 
             var prim = {};
-            prim.color = [0.8, 0.8, 0.8];
             prim.start = 0;
             prim.count = 4;
             prim.drawType = gl.TRIANGLE_STRIP;
@@ -466,50 +449,42 @@
     });
     Models.Plane = Plane;
 
-    var BILLBOARD_VERT_SHADER_SOURCE = M([
-        'precision mediump float;',
-        '',
-        'uniform mat4 u_localMatrix;',
-        'uniform mat4 u_viewMatrix;',
-        'uniform mat4 u_projection;',
-        '',
-        'uniform vec3 u_cameraRight;',
-        'uniform vec3 u_cameraUp;',
-        'uniform vec2 u_size;',
-        '',
-        'varying vec2 v_position;',
-        '',
-        'attribute vec3 a_position;',
-        '',
-        'void main() {',
-        '    vec4 mdlPos = u_localMatrix * vec4(0, 0, 0, 1.0);',
-        '    vec3 vtxPos = mdlPos.xyz + u_cameraRight*a_position.x*u_size.x + u_cameraUp*a_position.y*u_size.y;',
-        '    v_position = a_position.xy;',
-        '    gl_Position = u_projection * u_viewMatrix * vec4(vtxPos, 1.0);',
-        '}',
-    ]);
-
-    var BILLBOARD_FRAG_SHADER_SOURCE = M([
-        'precision mediump float;',
-        '',
-        'uniform vec3 u_color;',
-        'varying vec2 v_position;',
-        '',
-        'void main() {',
-        '    float dist = length(v_position);',
-        '    if (dist > 1.0) discard;',
-        '    gl_FragColor = mix(vec4(u_color, 1.0), vec4(1.0, 1.0, 1.0, 1.0), 1.0 - dist);',
-        '}',
-    ]);
-
     function createBillboardProgram(gl) {
-        var vertShader = GLUtils.compileShader(gl, BILLBOARD_VERT_SHADER_SOURCE, gl.VERTEX_SHADER);
-        var fragShader = GLUtils.compileShader(gl, BILLBOARD_FRAG_SHADER_SOURCE, gl.FRAGMENT_SHADER);
-
-        var prog = gl.createProgram();
-        gl.attachShader(prog, vertShader);
-        gl.attachShader(prog, fragShader);
-        gl.linkProgram(prog);
+        var prog = GLUtils.compileProgram(gl,
+// Common 
+M([
+'precision mediump float;',
+'',
+'uniform mat4 u_localMatrix;',
+'uniform mat4 u_viewMatrix;',
+'uniform mat4 u_projection;',
+'',
+'uniform vec3 u_cameraRight;',
+'uniform vec3 u_cameraUp;',
+'uniform vec2 u_size;',
+'uniform vec3 u_color;',
+'',
+'varying vec2 v_position;',
+]),
+// Vert 
+M([
+'attribute vec3 a_position;',
+'',
+'void main() {',
+'    vec4 mdlPos = u_localMatrix * vec4(0, 0, 0, 1.0);',
+'    vec3 vtxPos = mdlPos.xyz + u_cameraRight*a_position.x*u_size.x + u_cameraUp*a_position.y*u_size.y;',
+'    v_position = a_position.xy;',
+'    gl_Position = u_projection * u_viewMatrix * vec4(vtxPos, 1.0);',
+'}',
+]),
+// Frag 
+M([
+'void main() {',
+'    float dist = length(v_position);',
+'    if (dist > 1.0) discard;',
+'    gl_FragColor = mix(vec4(u_color, 1.0), vec4(1.0, 1.0, 1.0, 1.0), 1.0 - dist);',
+'}',
+]));
 
         prog.uniforms = {};
         prog.uniforms.projection = gl.getUniformLocation(prog, "u_projection");
@@ -551,7 +526,6 @@
             verts[11] = 0;
 
             var prim = {};
-            prim.color = [0.8, 0.8, 0.8];
             prim.start = 0;
             prim.count = 4;
             prim.drawType = gl.TRIANGLE_STRIP;
