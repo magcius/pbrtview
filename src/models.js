@@ -141,20 +141,6 @@ M([
         return prog;
     }
 
-    function dummyTex(w, h) {
-        var canvas = document.createElement('canvas');
-        canvas.width = w; canvas.height = h;
-        var ctx = canvas.getContext('2d');
-        ctx.fillStyle = 'red';
-        ctx.fillRect(0, 0, w, h);
-
-        ctx.fillStyle = 'green';
-        ctx.fillRect(20, 20, 100, 100);
-
-        var img = ctx.getImageData(0, 0, w, h);
-        return new Uint8Array(img.data);
-    }
-
     var SHADOW_MAP_SIZE = 512;
     var Light = new Class({
         Name: 'Light',
@@ -168,7 +154,7 @@ M([
 
             this._shadowMapColor = gl.createTexture();
             gl.bindTexture(gl.TEXTURE_2D, this._shadowMapColor);
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, 0, gl.RGBA, gl.UNSIGNED_BYTE, dummyTex(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE));
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
