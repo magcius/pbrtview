@@ -521,7 +521,7 @@ M([
                 gl.uniformMatrix4fv(glLight.view, false, mLight._shadowMapView);
             }
 
-            ctx.lights.slice(0, 1).forEach(function(mLight, i) {
+            ctx.lights.forEach(function(mLight, i) {
                 setLight(prog.uniforms.lights[i], mLight, i);
             });
 
