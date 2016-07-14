@@ -20,7 +20,7 @@
             this._gl = gl;
 
             this.currentProgram = null;
-            this.forceMaterial = true;
+            this.forceMaterial = false;
         },
 
         setProgram: function(prog) {
@@ -67,26 +67,27 @@
 
         _render: function() {
             var gl = this._gl;
+            var ctx = this._renderCtx;
 
             // Shadow map.
-            var ctx = this._renderCtx;
             ctx.lights.forEach(function(light) {
                 light.renderShadowMapPrologue(ctx);
 
                 ctx.forceMaterial = true;
                 this.models.forEach(function(model) {
-                    model.render(this._renderCtx);
+                    if (model.castsShadow)
+                        model.render(this._renderCtx);
                 }.bind(this));
                 ctx.forceMaterial = false;
 
                 light.renderShadowMapEpilogue();
             }.bind(this));
-            this._renderCtx.view = this._view;
 
             // Normal render.
             gl.enable(gl.DEPTH_TEST);
             gl.clearColor(0.88, 0.88, 0.88, 1);
             gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+            gl.cullFace(gl.BACK);
 
             gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
 
@@ -140,6 +141,20 @@ M([
         return prog;
     }
 
+    function dummyTex(w, h) {
+        var canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        var ctx = canvas.getContext('2d');
+        ctx.fillStyle = 'red';
+        ctx.fillRect(0, 0, w, h);
+
+        ctx.fillStyle = 'green';
+        ctx.fillRect(20, 20, 100, 100);
+
+        var img = ctx.getImageData(0, 0, w, h);
+        return new Uint8Array(img.data);
+    }
+
     var SHADOW_MAP_SIZE = 512;
     var Light = new Class({
         Name: 'Light',
@@ -153,9 +168,11 @@ M([
 
             this._shadowMapColor = gl.createTexture();
             gl.bindTexture(gl.TEXTURE_2D, this._shadowMapColor);
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, 0, gl.RGB, gl.UNSIGNED_BYTE, null);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, 0, gl.RGBA, gl.UNSIGNED_BYTE, dummyTex(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE));
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
             this._shadowMapRenderbuffer = gl.createRenderbuffer();
             gl.bindRenderbuffer(gl.RENDERBUFFER, this._shadowMapRenderbuffer);
@@ -170,7 +187,7 @@ M([
             this._shadowMapProgram = createShadowMapProgram(gl);
 
             this._shadowMapProjection = mat4.create();
-            mat4.perspective(this._shadowMapProjection, Math.PI / 4, 1, 0.2, 256);
+            mat4.perspective(this._shadowMapProjection, Math.PI / 2, 1, 0.2, 256);
 
             this._shadowMapView = mat4.create();
         },
@@ -182,13 +199,16 @@ M([
             gl.bindFramebuffer(gl.FRAMEBUFFER, this._shadowMapFramebuffer);
             gl.viewport(0, 0, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
             gl.clearColor(1, 1, 1, 1);
-            gl.clearDepth(1);
+            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+            gl.cullFace(gl.FRONT);
 
             var prog = ctx.currentProgram;
             gl.uniformMatrix4fv(prog.uniforms.projection, false, this._shadowMapProjection);
 
             var pos = this.position;
-            mat4.lookAt(this._shadowMapView, pos, [0, 0, 0], [0, 1, 0]);
+            mat4.identity(this._shadowMapView);
+            mat4.rotateX(this._shadowMapView, this._shadowMapView, Math.PI / 2);
+            mat4.translate(this._shadowMapView, this._shadowMapView, [-pos[0], -pos[1], -pos[2]]);
             gl.uniformMatrix4fv(prog.uniforms.viewMatrix, false, this._shadowMapView);
         },
 
@@ -205,6 +225,7 @@ M([
         initialize: function() {
             this.children = [];
             this.localMatrix = mat4.create();
+            this.castsShadow = true;
         },
 
         render: function(ctx) {
@@ -240,6 +261,8 @@ M([
             this._renderProgram = null;
             this._primitives = [];
             this.localMatrix = mat4.create();
+
+            this.castsShadow = true;
 
             var args = [].slice.call(arguments, 1);
             this._buildModel.apply(this, args);
@@ -359,6 +382,7 @@ M([
 'varying vec4 v_positionWorld;',
 'varying vec4 v_positionEye;',
 'varying vec4 v_normalEye;',
+'varying vec2 v_uv;',
 ]),
 // Vert
 M([
@@ -370,6 +394,7 @@ M([
 '    v_positionEye = u_viewMatrix * v_positionWorld;',
 '    v_normalEye = u_normalMatrix * vec4(a_normal, 1.0);',
 '    gl_Position = u_projection * v_positionEye;',
+'    v_uv = (a_position.xz + 1.0) / 2.0;',
 '}',
 ]),
 // Frag
@@ -414,17 +439,20 @@ M([
 '    return F * G * D;',
 '}',
 '',
-'vec3 light_getShadow(const in Light light, sampler2D shadowMap) {',
+'float light_getShadow(const in Light light, sampler2D shadowMap) {',
 '    vec4 lightWorldPos = light.view * v_positionWorld;',
-'    vec4 lightClipPos = light.projection * lightWorldPos;',
-'    vec2 lightUV = lightClipPos.xy / lightClipPos.w;',
-'    vec3 shadowColor = normalize(vec3(lightWorldPos.x, 0.0, lightWorldPos.y));',
-'    return shadowColor;',
-// '    float lightDepth = texture2D(shadowMap, lightUV).r;',
-// '    return lightDepth;',
+'    vec4 lightEyePos = light.projection * lightWorldPos;',
+'    vec2 lightDevice = (lightEyePos.xy / lightEyePos.w);',
+'    vec2 lightUV = lightDevice * 0.5 + 0.5;',
+'    float shadowBias = 0.01;',
+'    float lightDepth = texture2D(shadowMap, lightUV).r + shadowBias;',
+'    float normalDepth = (lightEyePos.z * 0.01);',
+'    return smoothstep(normalDepth - 0.1, normalDepth + 0.1, lightDepth);',
 '}',
 '',
 'vec3 light_getReflectedLight(const in Light light, sampler2D shadowMap) {',
+'    if (light.radius <= 1.0) return vec3(0.0);',
+'',
 '    vec3 lightPosEye = (u_viewMatrix * vec4(light.pos, 1.0)).xyz;',
 '    vec3 lightToModel = lightPosEye - v_positionEye.xyz;',
 '    vec3 lightColor = light.color * attenuate(light, length(lightToModel));',
@@ -441,7 +469,7 @@ M([
 '    // Technically not energy-conserving, since we add the same light',
 '    // for both specular and diffuse, but it\'s minimal so we don\'t care...',
 '    vec3 outgoingLight = (directIrradiance * diffuse) + (directIrradiance * specular);',
-'    return outgoingLight;',
+'    return outgoingLight * light_getShadow(light, shadowMap);',
 '}',
 '',
 'void main() {',
@@ -762,6 +790,8 @@ M([
             this._setBuffers(verts, null);
 
             this.setMaterial(new BillboardMaterial(gl));
+
+            this.castsShadow = false;
         },
 
         _renderPrologue: function(ctx) {

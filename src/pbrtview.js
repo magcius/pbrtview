@@ -7,6 +7,9 @@
     function absclamp(x, lim) {
         return clamp(x, -lim, lim);
     }
+    function sign(n) {
+        return n === 0 ? 0 : n > 0 ? 1 : -1;
+    }
 
     function createViewer(canvas) {
         var gl = canvas.getContext("webgl", { alpha: false });
@@ -16,28 +19,29 @@
 
         var scene = new Models.Scene(gl);
         var lights = [
-            new Models.Light(gl, [50, 30, 50], [1, .4, .4], 100),
-            new Models.Light(gl, [50, 40, 50], [.4, 1, .4], 150),
+            new Models.Light(gl, [50, 50, 50], [1, .6, .6], 100),
+            new Models.Light(gl, [50, 45, 50], [.6, 1, .6], 125),
+            new Models.Light(gl, [50, 55, 50], [.6, .6, 1], 150),
         ];
         scene.setLights(lights);
 
-        var eh = new Models.Group();
-        mat4.scale(eh.localMatrix, eh.localMatrix, [2, 2, 2]);
-
         var eh_t = new Models.JMDL(gl, 'eh_t.jmdl');
         eh_t.setMaterial(new Models.PBRMaterial(gl, [0.92, 0.92, 0.92], 0.1));
-        eh.attachModel(eh_t);
         var eh_b = new Models.JMDL(gl, 'eh_b.jmdl');
         eh_b.setMaterial(new Models.PBRMaterial(gl, [1.0, 0.4, 0.4], 0.5));
-        eh.attachModel(eh_b);
 
-        scene.attachModel(eh);
+        var eh1 = new Models.Group();
+        mat4.scale(eh1.localMatrix, eh1.localMatrix, [2, 2, 2]);
+        eh1.attachModel(eh_t);
+        eh1.attachModel(eh_b);
+        scene.attachModel(eh1);
 
         var plane = new Models.Plane(gl);
         plane.setMaterial(new Models.PBRMaterial(gl, [1, 1, 1], 0.5));
         mat4.scale(plane.localMatrix, plane.localMatrix, [50, 1, 50]);
         scene.attachModel(plane);
 
+        window.lights = lights;
         lights.forEach(function(light) {
             light.bb = new Models.Billboard(gl);
             scene.attachModel(light.bb);
@@ -98,7 +102,7 @@
             vP += dy / 200;
         });
         canvas.addEventListener('wheel', function(e) {
-            vZ += e.deltaY * -.8;
+            vZ += sign(e.deltaY) * -4;
             e.preventDefault();
         });
 
@@ -112,6 +116,8 @@
             lights[0].position[2] = Math.sin(t / 730) * 30;
             lights[1].position[0] = Math.cos(t / 930 + 1) * 30;
             lights[1].position[2] = Math.sin(t / 670 + 1) * 30;
+            lights[2].position[0] = Math.cos(t / 430 + 1.2) * 30;
+            lights[2].position[2] = Math.cos(t / 610 + 1.2) * 30;
 
             lights.forEach(function(light) {
                 light.bb.setPosition(light.position);
