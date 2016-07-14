@@ -70,10 +70,6 @@
         },
     });
 
-    function Light(position, color, radius) {
-        return { position: position, color: color, radius: radius };
-    }
-
     function createViewer(canvas) {
         var gl = canvas.getContext("webgl", { alpha: false });
 
@@ -82,8 +78,8 @@
 
         var scene = new Scene(gl);
         var lights = [
-            new Light([50, 30, 50], [1, .4, .4], 100),
-            new Light([50, 40, 50], [.4, 1, .4], 150),
+            new Models.Light(gl, [50, 30, 50], [1, .4, .4], 100),
+            new Models.Light(gl, [50, 40, 50], [.4, 1, .4], 150),
         ];
         scene.setLights(lights);
 

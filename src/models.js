@@ -17,6 +17,17 @@
     // A dumb hack to have "multiline strings".
     function M(X) { return X.join('\n'); }
 
+    var Light = new Class({
+        Name: 'Light',
+
+        initialize: function(gl, position, color, radius) {
+            this.position = position;
+            this.color = color;
+            this.radius = radius;
+        },
+    });
+    Models.Light = Light;
+
     var Group = new Class({
         Name: 'Group',
 
