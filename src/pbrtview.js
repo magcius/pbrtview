@@ -11,6 +11,91 @@
         return n === 0 ? 0 : n > 0 ? 1 : -1;
     }
 
+    function cameraController(canvas) {
+        var keysDown = {};
+        var SHIFT = 16;
+
+        function isKeyDown(key) {
+            return !!keysDown[key.charCodeAt(0)];
+        }
+
+        window.addEventListener('keydown', function(e) {
+            keysDown[e.keyCode] = true;
+        });
+        window.addEventListener('keyup', function(e) {
+            delete keysDown[e.keyCode];
+        });
+
+        var Z = -150;
+        var vZ = 0;
+        function updateCamera() {
+            var x = P, y = T;
+            var sinX = Math.sin(x);
+            var cosX = Math.cos(x);
+            var sinY = Math.sin(y);
+            var cosY = Math.cos(y);
+            var camera = [
+                cosY, sinX*sinY, -cosX*sinY, 0,
+                0, cosX, sinX, 0,
+                sinY, -sinX*cosY, cosX*cosY, 0,
+                0, 0, Z, 1,
+            ];
+            return camera;
+        }
+
+        var vT = 0, vP = 0;
+        var dragging = false, px, py;
+        canvas.addEventListener('mousedown', function(e) {
+            dragging = true;
+            canvas.classList.add('grabbing');
+            px = e.pageX; py = e.pageY;
+        });
+        canvas.addEventListener('mouseup', function(e) {
+            dragging = false;
+            canvas.classList.remove('grabbing');
+        });
+        canvas.addEventListener('mousemove', function(e) {
+            if (!dragging)
+                return;
+
+            var dx = e.pageX - px;
+            var dy = e.pageY - py;
+            px = e.pageX; py = e.pageY;
+
+            vT += dx / 200;
+            vP += dy / 200;
+        });
+        canvas.addEventListener('wheel', function(e) {
+            vZ += sign(e.deltaY) * -4;
+            e.preventDefault();
+        });
+
+        var T = 0.35, P = 0.15;
+
+        return function update() {
+            if (isKeyDown('A'))
+                vT += 0.05;
+            if (isKeyDown('D'))
+                vT -= 0.05;
+            if (isKeyDown('W'))
+                vP += 0.05;
+            if (isKeyDown('S'))
+                vP -= 0.05;
+
+            vP = absclamp(vP, 2);
+            vT = absclamp(vT, 2);
+            var drag = dragging ? 0.92 : 0.96;
+            P += vP / 10; vP *= drag;
+            if (P < 0.04) P = 0.04, vP = 0;
+            if (P > 1.50) P = 1.50, vP = 0;
+            T += vT / 10; vT *= drag;
+            Z += vZ; vZ *= 0.8;
+            if (Z > -10) Z = -10, vZ = 0;
+
+            return updateCamera();
+        }
+    }
+
     function createViewer(canvas) {
         var gl = canvas.getContext("webgl", { alpha: false });
 
@@ -47,69 +132,13 @@
             scene.attachModel(light.bb);
         });
 
-        var keysDown = {};
-        var SHIFT = 16;
-
-        function isKeyDown(key) {
-            return !!keysDown[key.charCodeAt(0)];
-        }
-
-        window.addEventListener('keydown', function(e) {
-            keysDown[e.keyCode] = true;
-        });
-        window.addEventListener('keyup', function(e) {
-            delete keysDown[e.keyCode];
-        });
         var t = 0;
 
-        var Z = -150;
-        var vZ = 0;
-        function updateCamera() {
-            var x = P, y = T;
-            var sinX = Math.sin(x);
-            var cosX = Math.cos(x);
-            var sinY = Math.sin(y);
-            var cosY = Math.cos(y);
-            var camera = [
-                cosY, sinX*sinY, -cosX*sinY, 0,
-                0, cosX, sinX, 0,
-                sinY, -sinX*cosY, cosX*cosY, 0,
-                0, 0, Z, 1,
-            ];
-            scene.setCamera(camera);
-        }
-
-        var vT = 0, vP = 0;
-        var dragging = false, px, py;
-        canvas.addEventListener('mousedown', function(e) {
-            dragging = true;
-            canvas.classList.add('grabbing');
-            px = e.pageX; py = e.pageY;
-        });
-        canvas.addEventListener('mouseup', function(e) {
-            dragging = false;
-            canvas.classList.remove('grabbing');
-        });
-        canvas.addEventListener('mousemove', function(e) {
-            if (!dragging)
-                return;
-
-            var dx = e.pageX - px;
-            var dy = e.pageY - py;
-            px = e.pageX; py = e.pageY;
-
-            vT += dx / 200;
-            vP += dy / 200;
-        });
-        canvas.addEventListener('wheel', function(e) {
-            vZ += sign(e.deltaY) * -4;
-            e.preventDefault();
-        });
-
-        var T = 0.35, P = 0.15;
+        var camera = mat4.create();
+        scene.setCamera(camera);
+        var updateCameraController = cameraController(canvas);
 
         function update(nt) {
-            var dt = nt - t;
             t = nt;
 
             lights[0].position[0] = Math.cos(t / 890) * 30;
@@ -124,25 +153,7 @@
                 light.bb.setColor(light.color);
             });
 
-            if (isKeyDown('A'))
-                vT += 0.05;
-            if (isKeyDown('D'))
-                vT -= 0.05;
-            if (isKeyDown('W'))
-                vP += 0.05;
-            if (isKeyDown('S'))
-                vP -= 0.05;
-
-            vP = absclamp(vP, 2);
-            vT = absclamp(vT, 2);
-            var drag = dragging ? 0.92 : 0.96;
-            P += vP / 10; vP *= drag;
-            if (P < 0.04) P = 0.04, vP = 0;
-            if (P > 1.50) P = 1.50, vP = 0;
-            T += vT / 10; vT *= drag;
-            Z += vZ; vZ *= 0.8;
-            if (Z > -10) Z = -10, vZ = 0;
-            updateCamera();
+            scene.setCamera(updateCameraController());
 
             scene.update();
             window.requestAnimationFrame(update);
