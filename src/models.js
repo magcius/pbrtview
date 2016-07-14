@@ -103,6 +103,8 @@
         },
 
         _renderPrologue: function(ctx) {
+            ctx.setMaterial(this._material);
+
             var gl = this._gl;
             var prog = ctx.currentProgram;
             gl.uniformMatrix4fv(prog.uniforms.projection, false, ctx.projection);
@@ -138,11 +140,14 @@
             gl.drawArrays(prim.drawType, prim.start, prim.count);
         },
 
+        setMaterial: function(material) {
+            this._material = material;  
+        },
+
         render: function(ctx) {
             if (this._loaded === false)
                 return;
 
-            ctx.setProgram(this._renderProgram);
             this._renderPrologue(ctx);
             this._primitives.forEach(function(prim) {
                 this._renderPrimitive(ctx, prim);
@@ -306,19 +311,21 @@
         return prog;
     }
 
-    var PBRModel = new Class({
-        Name: 'PBRModel',
-        Extends: BaseModel,
+    var PBRMaterial = new Class({
+        Name: 'PBRMaterial',
 
-        _buildModel: function() {
-            this.parent();
-            var gl = this._gl;
+        initialize: function(gl) {
+            this._gl = gl;
             this._renderProgram = createPBRProgram(gl);
+
+            var args = [].slice.call(arguments, 1);
+            this.set.apply(this, args);
         },
 
-        _renderPrologue: function(ctx) {
-            this.parent(ctx);
+        renderPrologue: function(ctx) {
             var gl = this._gl;
+
+            ctx.setProgram(this._renderProgram);
             var prog = ctx.currentProgram;
 
             function setLight(glLight, mLight) {
@@ -335,11 +342,12 @@
             gl.uniform1f(prog.uniforms.roughness, this._roughness);
         },
 
-        setMaterial: function(diffuseColor, roughness) {
+        set: function(diffuseColor, roughness) {
             this._diffuseColor = diffuseColor;
             this._roughness = roughness;
         },
     });
+    Models.PBRMaterial = PBRMaterial;
 
     function fetch(path) {
         var request = new XMLHttpRequest();
@@ -352,7 +360,7 @@
 
     var JMDL = new Class({
         Name: 'JMDL',
-        Extends: PBRModel,
+        Extends: BaseModel,
 
         _buildModel: function(filename) {
             this.parent();
@@ -410,7 +418,7 @@
 
     var Plane = new Class({
         Name: 'Plane',
-        Extends: PBRModel,
+        Extends: BaseModel,
 
         _buildModel: function() {
             this.parent();
@@ -557,6 +565,8 @@
 
         _renderPrologue: function(ctx) {
             var gl = this._gl;
+            ctx.setProgram(this._renderProgram);
+
             var prog = ctx.currentProgram;
             gl.uniformMatrix4fv(prog.uniforms.projection, false, ctx.projection);
 

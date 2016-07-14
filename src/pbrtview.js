@@ -87,16 +87,16 @@
         mat4.scale(eh.localMatrix, eh.localMatrix, [2, 2, 2]);
 
         var eh_t = new Models.JMDL(gl, 'eh_t.jmdl');
-        eh_t.setMaterial([0.92, 0.92, 0.92], 0.1);
+        eh_t.setMaterial(new Models.PBRMaterial(gl, [0.92, 0.92, 0.92], 0.1));
         eh.attachModel(eh_t);
         var eh_b = new Models.JMDL(gl, 'eh_b.jmdl');
-        eh_b.setMaterial([1.0, 0.4, 0.4], 0.5);
+        eh_b.setMaterial(new Models.PBRMaterial(gl, [1.0, 0.4, 0.4], 0.5));
         eh.attachModel(eh_b);
 
         scene.attachModel(eh);
 
         var plane = new Models.Plane(gl);
-        plane.setMaterial([1, 1, 1], 0.5);
+        plane.setMaterial(new Models.PBRMaterial(gl, [1, 1, 1], 0.5));
         mat4.scale(plane.localMatrix, plane.localMatrix, [50, 1, 50]);
         scene.attachModel(plane);
 
