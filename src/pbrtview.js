@@ -23,6 +23,10 @@
             this.currentProgram = prog;
             gl.useProgram(this.currentProgram);
         },
+
+        setMaterial: function(material) {
+            material.renderPrologue(this);
+        },
     });
 
     // The main renderer.
