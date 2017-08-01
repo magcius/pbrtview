@@ -104,16 +104,16 @@
 
         var scene = new Models.Scene(gl);
         var lights = [
-            new Models.Light(gl, [50, 50, 50], [1, .6, .6], 100),
-            new Models.Light(gl, [50, 45, 50], [.6, 1, .6], 125),
-            new Models.Light(gl, [50, 55, 50], [.6, .6, 1], 150),
+            new Models.Light(gl, [50, 50, 50], [1, .6, .6], 4, 100),
+            new Models.Light(gl, [50, 45, 50], [.6, 1, .6], 4, 125),
+            new Models.Light(gl, [50, 55, 50], [.6, .6, 1], 4, 150),
         ];
         scene.setLights(lights);
 
         var eh_t = new Models.JMDL(gl, 'eh_t.jmdl');
-        eh_t.setMaterial(new Models.PBRMaterial(gl, [0.92, 0.92, 0.92], 0.1));
+        eh_t.setMaterial(new Models.PBRMaterial(gl, [0.2, 0.2, 0.2], 0.1));
         var eh_b = new Models.JMDL(gl, 'eh_b.jmdl');
-        eh_b.setMaterial(new Models.PBRMaterial(gl, [1.0, 0.4, 0.4], 0.5));
+        eh_b.setMaterial(new Models.PBRMaterial(gl, [0.2, 0.05, 0.05], 0.5));
 
         var eh1 = new Models.Group();
         mat4.scale(eh1.localMatrix, eh1.localMatrix, [2, 2, 2]);
@@ -122,7 +122,7 @@
         scene.attachModel(eh1);
 
         var plane = new Models.Plane(gl);
-        plane.setMaterial(new Models.PBRMaterial(gl, [1, 1, 1], 0.5));
+        plane.setMaterial(new Models.PBRMaterial(gl, [0.2, 0.2, 0.2], 0.5));
         mat4.scale(plane.localMatrix, plane.localMatrix, [50, 1, 50]);
         scene.attachModel(plane);
 

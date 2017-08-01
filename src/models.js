@@ -145,11 +145,12 @@ M([
     var Light = new Class({
         Name: 'Light',
 
-        initialize: function(gl, position, color, radius) {
+        initialize: function(gl, position, color, intensity, radius) {
             this._gl = gl;
 
             this.position = position;
             this.color = color;
+            this.intensity = intensity;
             this.radius = radius;
 
             this._shadowMapColor = gl.createTexture();
@@ -349,7 +350,7 @@ M([
 '',
 'struct Light {',
 '    vec3 pos, color;',
-'    float radius;',
+'    float radius, intensity;',
 '    mat4 view, projection;',
 '};',
 '',
@@ -441,7 +442,7 @@ M([
 '',
 '    vec3 lightPosEye = (u_viewMatrix * vec4(light.pos, 1.0)).xyz;',
 '    vec3 lightToModel = lightPosEye - v_positionEye.xyz;',
-'    vec3 lightColor = light.color * attenuate(light, length(lightToModel));',
+'    vec3 lightColor = light.color * light.intensity * attenuate(light, length(lightToModel));',
 '',
 '    vec3 L = normalize(lightToModel);',
 '    vec3 N = normalize(v_normalEye.xyz);',
@@ -465,9 +466,11 @@ M([
 '        directReflectedLight += light_getReflectedLight(u_lights[i], u_lights_shadowMap[i]);',
 '    }',
 '',
-'    vec3 indirectDiffuseIrradiance = vec3(0.5, 0.5, 0.5);',
+'    vec3 indirectDiffuseIrradiance = vec3(0.5);',
 '    vec3 indirectReflectedLight = indirectDiffuseIrradiance * u_material.diffuseColor;',
-'    vec3 color = directReflectedLight + indirectReflectedLight;',
+'    vec3 dcol = directReflectedLight + indirectReflectedLight;',
+'',
+'    vec3 color = pow(dcol, vec3(1.0/2.2));',
 '',
 '    gl_FragColor = vec4(color, 1.0);',
 '}',
@@ -493,6 +496,7 @@ M([
             light.position = gl.getUniformLocation(prog, "u_lights["+i+"].pos");
             light.color = gl.getUniformLocation(prog, "u_lights["+i+"].color");
             light.radius = gl.getUniformLocation(prog, "u_lights["+i+"].radius");
+            light.intensity = gl.getUniformLocation(prog, "u_lights["+i+"].intensity");
             light.projection = gl.getUniformLocation(prog, "u_lights["+i+"].projection");
             light.view = gl.getUniformLocation(prog, "u_lights["+i+"].view");
             light.shadowMap = gl.getUniformLocation(prog, "u_lights_shadowMap["+i+"]");
@@ -525,6 +529,7 @@ M([
             function setLight(glLight, mLight, i) {
                 gl.uniform3fv(glLight.position, mLight.position);
                 gl.uniform3fv(glLight.color, mLight.color);
+                gl.uniform1f(glLight.intensity, mLight.intensity);
                 gl.uniform1f(glLight.radius, mLight.radius);
 
                 gl.activeTexture(gl.TEXTURE0 + i);
