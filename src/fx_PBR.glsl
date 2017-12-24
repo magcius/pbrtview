@@ -34,9 +34,9 @@ attribute vec3 a_position;
 attribute vec3 a_normal;
 
 void main() {
-    v_positionWorld = u_localMatrix * vec4(a_position, 1.0);
+    v_positionWorld = u_localMatrix * vec4(a_position, 1);
     v_positionEye = u_viewMatrix * v_positionWorld;
-    v_normalEye = u_normalMatrix * vec4(a_normal, 1.0);
+    v_normalEye = u_normalMatrix * vec4(a_normal, 1);
     gl_Position = u_projection * v_positionEye;
     v_uv = (a_position.xz + 1.0) / 2.0;
 }
@@ -95,9 +95,10 @@ float light_getShadow(const in Light light, sampler2D shadowMap) {
 }
 
 vec3 light_getReflectedLight(const in Light light, sampler2D shadowMap) {
-    if (light.radius <= 1.0) return vec3(0.0);
+    if (light.radius <= 1.0)
+        return vec3(0);
 
-    vec3 lightPosEye = (u_viewMatrix * vec4(light.pos, 1.0)).xyz;
+    vec3 lightPosEye = (u_viewMatrix * vec4(light.pos, 1)).xyz;
     vec3 lightToModel = lightPosEye - v_positionEye.xyz;
     vec3 lightColor = light.color * light.intensity * attenuate(light, length(lightToModel));
 
@@ -117,7 +118,7 @@ vec3 light_getReflectedLight(const in Light light, sampler2D shadowMap) {
 }
 
 void main() {
-    vec3 directReflectedLight = vec3(0.0);
+    vec3 directReflectedLight = vec3(0);
 
     for (int i = 0; i < NUM_LIGHTS; i++) {
         directReflectedLight += light_getReflectedLight(u_lights[i], u_lights_shadowMap[i]);
@@ -127,8 +128,8 @@ void main() {
     vec3 indirectReflectedLight = indirectDiffuseIrradiance * u_material.diffuseColor;
     vec3 dcol = directReflectedLight + indirectReflectedLight;
 
-    vec3 color = pow(dcol, vec3(1.0/2.2));
+    vec3 color = pow(dcol, vec3(1.0 / 2.2));
 
-    gl_FragColor = vec4(color, 1.0);
+    gl_FragColor = vec4(color, 1);
 }
 #endif
