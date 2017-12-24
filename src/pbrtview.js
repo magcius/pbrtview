@@ -97,7 +97,7 @@
     }
 
     function createViewer(canvas) {
-        var gl = canvas.getContext("webgl", { alpha: false });
+        var gl = canvas.getContext("webgl2", { alpha: false });
 
         gl.viewportWidth = canvas.width;
         gl.viewportHeight = canvas.height;

@@ -119,11 +119,12 @@
             this.intensity = intensity;
             this.radius = radius;
 
-            const depthTexture = gl.getExtension('WEBGL_depth_texture');
+            gl.getExtension('EXT_color_buffer_float');
+            gl.getExtension('OES_texture_float_linear');
 
             this._shadowMapColor = gl.createTexture();
             gl.bindTexture(gl.TEXTURE_2D, this._shadowMapColor);
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+            gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA32F, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -154,7 +155,7 @@
             this._shadowMapProgram = createShadowMapProgram(gl);
 
             this._shadowMapProjection = mat4.create();
-            mat4.perspective(this._shadowMapProjection, Math.PI / 2, 1.0, 1.0, 256.0);
+            mat4.perspective(this._shadowMapProjection, Math.PI / 2, 1.0, 0.1, 256.0);
 
             this._shadowMapView = mat4.create();
         }
@@ -165,7 +166,8 @@
 
             gl.bindFramebuffer(gl.FRAMEBUFFER, this._shadowMapFramebuffer);
             gl.viewport(0, 0, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
-            gl.clear(gl.DEPTH_BUFFER_BIT);
+            gl.clearColor(0, 0, 0, 1);
+            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
             gl.cullFace(gl.FRONT);
 
             const prog = ctx.currentProgram;
