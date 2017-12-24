@@ -1,5 +1,6 @@
 
 precision mediump float;
+precision highp sampler2DShadow;
 
 uniform mat4 u_localMatrix;
 uniform mat4 u_viewMatrix;
@@ -22,12 +23,14 @@ uniform Material u_material;
 #define NUM_LIGHTS 4
 uniform Light u_lights[NUM_LIGHTS];
 // Workaround ANGLE not supporting samplers in structs...
-uniform sampler2D u_lights_shadowMap[NUM_LIGHTS];
+uniform sampler2DShadow u_lights_shadowMap[NUM_LIGHTS];
 
 varying vec4 v_positionWorld;
 varying vec4 v_positionEye;
 varying vec4 v_normalEye;
 varying vec2 v_uv;
+
+varying vec4 v_lights_positionEye[NUM_LIGHTS];
 
 #ifdef VERT
 in vec3 a_position;
@@ -39,6 +42,12 @@ void main() {
     v_normalEye = u_normalMatrix * vec4(a_normal, 1);
     gl_Position = u_projection * v_positionEye;
     v_uv = (a_position.xz + 1.0) / 2.0;
+
+    const mat4 depthScaleMatrix = mat4(0.5, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.5, 0.5, 0.5, 1.0);
+    for (int i = 0; i < NUM_LIGHTS; i++) {
+        Light light = u_lights[i];
+        v_lights_positionEye[i] = depthScaleMatrix * light.projection * light.view * v_positionWorld;
+    }
 }
 #endif
 
@@ -85,17 +94,17 @@ vec3 brdf_Specular_GGX(const in vec3 N, const in vec3 L, const in vec3 V, const 
     return F * G * D;
 }
 
-float light_getShadow(const in Light light, sampler2D shadowMap) {
-    const mat4 depthScaleMatrix = mat4(0.5, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.5, 0.5, 0.5, 1.0);
-    const float shadowBias = 0.002;
-    vec4 lightWorldPos = light.view * v_positionWorld;
-    vec4 lightEyePos = depthScaleMatrix * light.projection * lightWorldPos;
-    float lightDepth = textureProj(shadowMap, lightEyePos.xyw).r;
-    float normalDepth = (lightEyePos.z / lightEyePos.w) - shadowBias;
-    return step(normalDepth, lightDepth);
+float light_getShadow(const in int lightIndex) {
+    const float shadowBias = 0.008;
+    Light light = u_lights[lightIndex];
+    vec4 lightEyePos = v_lights_positionEye[lightIndex];
+    lightEyePos.z -= shadowBias;
+    return textureProj(u_lights_shadowMap[lightIndex], lightEyePos);
 }
 
-vec3 light_getReflectedLight(const in Light light, sampler2D shadowMap) {
+vec3 light_getReflectedLight(const in int lightIndex) {
+    Light light = u_lights[lightIndex];
+
     if (light.radius <= 1.0)
         return vec3(0);
 
@@ -115,14 +124,14 @@ vec3 light_getReflectedLight(const in Light light, sampler2D shadowMap) {
     // Technically not energy-conserving, since we add the same light
     // for both specular and diffuse, but it's minimal so we don't care...
     vec3 outgoingLight = (directIrradiance * diffuse) + (directIrradiance * specular);
-    return outgoingLight * light_getShadow(light, shadowMap);
+    return outgoingLight * light_getShadow(lightIndex);
 }
 
 void main() {
     vec3 directReflectedLight = vec3(0);
 
     for (int i = 0; i < NUM_LIGHTS; i++) {
-        directReflectedLight += light_getReflectedLight(u_lights[i], u_lights_shadowMap[i]);
+        directReflectedLight += light_getReflectedLight(i);
     }
 
     vec3 indirectDiffuseIrradiance = vec3(0.5);
