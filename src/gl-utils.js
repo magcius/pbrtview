@@ -10,6 +10,7 @@
         gl.compileShader(shader);
 
         if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+            console.error(str);
             console.error(gl.getShaderInfoLog(shader));
             return null;
         }
