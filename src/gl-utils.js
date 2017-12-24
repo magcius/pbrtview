@@ -1,10 +1,10 @@
 (function(exports) {
     "use strict";
 
-    var GLUtils = {};
+    const GLUtils = {};
 
     function compileShader(gl, str, type) {
-        var shader = gl.createShader(type);
+        const shader = gl.createShader(type);
 
         gl.shaderSource(shader, str);
         gl.compileShader(shader);
@@ -18,24 +18,35 @@
         return shader;
     }
 
-    GLUtils.compileShader = compileShader;
-
-    function compileProgram(gl, common, vert, frag) {
-        var fullVert = common + '\n\n\n' + vert;
-        var fullFrag = common + '\n\n\n' + frag;
-
-        var vertShader = GLUtils.compileShader(gl, fullVert, gl.VERTEX_SHADER);
-        var fragShader = GLUtils.compileShader(gl, fullFrag, gl.FRAGMENT_SHADER);
-
-        var prog = gl.createProgram();
+    function compileShaders(gl, prog, fullVert, fullFrag) {
+        const vertShader = GLUtils.compileShader(gl, fullVert, gl.VERTEX_SHADER);
+        const fragShader = GLUtils.compileShader(gl, fullFrag, gl.FRAGMENT_SHADER);
         gl.attachShader(prog, vertShader);
         gl.attachShader(prog, fragShader);
         gl.linkProgram(prog);
+    }
+
+    function fetch(path) {
+        const request = new XMLHttpRequest();
+        request.open("GET", path, false);
+        request.overrideMimeType('text/plain');
+        request.send();
+        return request.responseText;
+    }
+
+    function compileProgramFile(gl, filename) {
+        const prog = gl.createProgram();
+
+        const vertHeader = '#define VERT 1\n#define vert_main main\n';
+        const fragHeader = '#define FRAG 1\n#define frag_main main\n';
+        const v = fetch(filename);
+        const fullVert = vertHeader + v;
+        const fullFrag = fragHeader + v;
+        compileShaders(gl, prog, fullVert, fullFrag);
 
         return prog;
     }
-
-    GLUtils.compileProgram = compileProgram;
+    GLUtils.compileProgramFile = compileProgramFile;
 
     exports.GLUtils = GLUtils;
 
