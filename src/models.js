@@ -109,7 +109,7 @@
         return prog;
     }
 
-    const SHADOW_MAP_SIZE = 512;
+    const SHADOW_MAP_SIZE = 1024;
     class Light {
         constructor(gl, position, color, intensity, radius) {
             this._gl = gl;
@@ -118,9 +118,6 @@
             this.color = color;
             this.intensity = intensity;
             this.radius = radius;
-
-            gl.getExtension('EXT_color_buffer_float');
-            gl.getExtension('OES_texture_float_linear');
 
             this._shadowMapDepth = gl.createTexture();
             gl.bindTexture(gl.TEXTURE_2D, this._shadowMapDepth);
