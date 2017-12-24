@@ -26,17 +26,12 @@
         gl.linkProgram(prog);
     }
 
-    const fetchCache = {};
     function fetch(path) {
-        if (!fetchCache[path]) {
-            const request = new XMLHttpRequest();
-            request.open("GET", path, false);
-            request.overrideMimeType('text/plain');
-            request.send();
-            const v = request.responseText;
-            fetchCache[path] = v;
-        }
-        return fetchCache[path];
+        const request = new XMLHttpRequest();
+        request.open("GET", path, false);
+        request.overrideMimeType('text/plain');
+        request.send();
+        return request.responseText;
     }
 
     function compileProgramFile(gl, filename) {
