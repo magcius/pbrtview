@@ -85,12 +85,11 @@ vec3 brdf_Specular_GGX(const in vec3 N, const in vec3 L, const in vec3 V, const 
 
 float light_getShadow(const in Light light, sampler2D shadowMap) {
     const mat4 depthScaleMatrix = mat4(0.5, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.5, 0.5, 0.5, 1.0);
+    const float shadowBias = 0.002;
     vec4 lightWorldPos = light.view * v_positionWorld;
     vec4 lightEyePos = depthScaleMatrix * light.projection * lightWorldPos;
-    vec3 lightDevice = (lightEyePos.xyz / lightEyePos.w);
-    float shadowBias = 0.008;
-    float lightDepth = texture2D(shadowMap, lightDevice.xy).r;
-    float normalDepth = (lightEyePos.w * 0.005) - shadowBias;
+    float lightDepth = texture2DProj(shadowMap, lightEyePos.xyw).r;
+    float normalDepth = (lightEyePos.z / lightEyePos.w) - shadowBias;
     return step(normalDepth, lightDepth);
 }
 

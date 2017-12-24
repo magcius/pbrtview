@@ -17,7 +17,6 @@ void main() {
 
 #ifdef FRAG
 void main() {
-    float depth = (gl_FragCoord.z / gl_FragCoord.w) * 0.005;
-    gl_FragColor = vec4(depth, 0, 0, 1);
+    gl_FragColor = vec4(gl_FragCoord.z, 0, 0, 1);
 }
 #endif

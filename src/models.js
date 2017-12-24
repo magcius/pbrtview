@@ -39,7 +39,7 @@
             this._view = mat4.create();
 
             this._projection = mat4.create();
-            mat4.perspective(this._projection, Math.PI / 4, gl.viewportWidth / gl.viewportHeight, 0.2, 256);
+            mat4.perspective(this._projection, TAU / 8, gl.viewportWidth / gl.viewportHeight, 1.0, 256);
 
             this._renderCtx = new RenderContext(gl);
             this._renderCtx.view = this._view;
@@ -122,40 +122,23 @@
             gl.getExtension('EXT_color_buffer_float');
             gl.getExtension('OES_texture_float_linear');
 
-            this._shadowMapColor = gl.createTexture();
-            gl.bindTexture(gl.TEXTURE_2D, this._shadowMapColor);
-            gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA32F, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            this._shadowMapDepth = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, this._shadowMapDepth);
+            gl.texStorage2D(gl.TEXTURE_2D, 1, gl.DEPTH_COMPONENT16, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
-            const d = true;
-            if (d) {
-                this._shadowMapDepth = gl.createRenderbuffer();
-                gl.bindRenderbuffer(gl.RENDERBUFFER, this._shadowMapDepth);
-                gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
-            } else {
-                this._shadowMapDepth = gl.createTexture();
-                gl.bindTexture(gl.TEXTURE_2D, this._shadowMapDepth);
-                gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE, 0, gl.DEPTH_COMPONENT, gl.UNSIGNED_SHORT, null);
-                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-            }
-
             this._shadowMapFramebuffer = gl.createFramebuffer();
             gl.bindFramebuffer(gl.FRAMEBUFFER, this._shadowMapFramebuffer);
-            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this._shadowMapColor, 0);
-            if (d) gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, this._shadowMapDepth);
-            else gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, this._shadowMapDepth, 0);
+            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, this._shadowMapDepth, 0);
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
             this._shadowMapProgram = createShadowMapProgram(gl);
 
             this._shadowMapProjection = mat4.create();
-            mat4.perspective(this._shadowMapProjection, Math.PI / 2, 1.0, 0.1, 256.0);
+            mat4.perspective(this._shadowMapProjection, TAU / 4, 1.0, 1.0, 256);
 
             this._shadowMapView = mat4.create();
         }
@@ -166,8 +149,8 @@
 
             gl.bindFramebuffer(gl.FRAMEBUFFER, this._shadowMapFramebuffer);
             gl.viewport(0, 0, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
-            gl.clearColor(0, 0, 0, 1);
-            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+            gl.colorMask(false, false, false, false);
+            gl.clear(gl.DEPTH_BUFFER_BIT);
             gl.cullFace(gl.FRONT);
 
             const prog = ctx.currentProgram;
@@ -183,6 +166,7 @@
         renderShadowMapEpilogue() {
             const gl = this._gl;
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            gl.colorMask(true, true, true, true);
         }
     }
     Models.Light = Light;
@@ -372,7 +356,7 @@
                 gl.uniform1f(glLight.radius, mLight.radius);
 
                 gl.activeTexture(gl.TEXTURE0 + i);
-                gl.bindTexture(gl.TEXTURE_2D, mLight._shadowMapColor);
+                gl.bindTexture(gl.TEXTURE_2D, mLight._shadowMapDepth);
                 gl.uniform1i(glLight.shadowMap, i);
 
                 gl.uniformMatrix4fv(glLight.projection, false, mLight._shadowMapProjection);
