@@ -601,7 +601,7 @@
             this._material.setColor(color);
         }
     }
-    Models.Billboard = Billboard;
+    Models.LightBillboard = LightBillboard;
 
     exports.Models = Models;
 

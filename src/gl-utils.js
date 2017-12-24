@@ -19,19 +19,24 @@
     }
 
     function compileShaders(gl, prog, fullVert, fullFrag) {
-        const vertShader = GLUtils.compileShader(gl, fullVert, gl.VERTEX_SHADER);
-        const fragShader = GLUtils.compileShader(gl, fullFrag, gl.FRAGMENT_SHADER);
+        const vertShader = compileShader(gl, fullVert, gl.VERTEX_SHADER);
+        const fragShader = compileShader(gl, fullFrag, gl.FRAGMENT_SHADER);
         gl.attachShader(prog, vertShader);
         gl.attachShader(prog, fragShader);
         gl.linkProgram(prog);
     }
 
+    const fetchCache = {};
     function fetch(path) {
-        const request = new XMLHttpRequest();
-        request.open("GET", path, false);
-        request.overrideMimeType('text/plain');
-        request.send();
-        return request.responseText;
+        if (!fetchCache[path]) {
+            const request = new XMLHttpRequest();
+            request.open("GET", path, false);
+            request.overrideMimeType('text/plain');
+            request.send();
+            const v = request.responseText;
+            fetchCache[path] = v;
+        }
+        return fetchCache[path];
     }
 
     function compileProgramFile(gl, filename) {

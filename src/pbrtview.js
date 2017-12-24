@@ -128,7 +128,7 @@
 
         window.lights = lights;
         lights.forEach(function(light) {
-            light.bb = new Models.Billboard(gl);
+            light.bb = new Models.LightBillboard(gl);
             scene.attachModel(light.bb);
         });
 
