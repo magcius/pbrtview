@@ -11,7 +11,7 @@ uniform vec3 u_color;
 varying vec2 v_position;
 
 #ifdef VERT
-attribute vec3 a_position;
+in vec3 a_position;
 
 void main() {
     vec4 mdlPos = u_localMatrix * vec4(0, 0, 0, 1);
@@ -24,10 +24,12 @@ void main() {
 #endif
 
 #ifdef FRAG
+out vec4 o_color;
+
 void main() {
     float dist = length(v_position);
     if (dist > 1.0)
         discard;
-    gl_FragColor = mix(vec4(u_color, 1), vec4(1, 1, 1, 1), 1.0 - dist);
+    o_color = mix(vec4(u_color, 1), vec4(1, 1, 1, 1), 1.0 - dist);
 }
 #endif

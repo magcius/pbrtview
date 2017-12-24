@@ -30,8 +30,8 @@ varying vec4 v_normalEye;
 varying vec2 v_uv;
 
 #ifdef VERT
-attribute vec3 a_position;
-attribute vec3 a_normal;
+in vec3 a_position;
+in vec3 a_normal;
 
 void main() {
     v_positionWorld = u_localMatrix * vec4(a_position, 1);
@@ -43,6 +43,8 @@ void main() {
 #endif
 
 #ifdef FRAG
+out vec4 o_color;
+
 float attenuate(const in Light light, const in float dist) {
     float att = clamp(1.0 - dist/light.radius, 0.0, 1.0);
     return att * att;
@@ -88,7 +90,7 @@ float light_getShadow(const in Light light, sampler2D shadowMap) {
     const float shadowBias = 0.002;
     vec4 lightWorldPos = light.view * v_positionWorld;
     vec4 lightEyePos = depthScaleMatrix * light.projection * lightWorldPos;
-    float lightDepth = texture2DProj(shadowMap, lightEyePos.xyw).r;
+    float lightDepth = textureProj(shadowMap, lightEyePos.xyw).r;
     float normalDepth = (lightEyePos.z / lightEyePos.w) - shadowBias;
     return step(normalDepth, lightDepth);
 }
@@ -129,6 +131,6 @@ void main() {
 
     vec3 color = pow(dcol, vec3(1.0 / 2.2));
 
-    gl_FragColor = vec4(color, 1);
+    o_color = vec4(color, 1);
 }
 #endif

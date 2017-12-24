@@ -37,8 +37,8 @@
     function compileProgramFile(gl, filename) {
         const prog = gl.createProgram();
 
-        const vertHeader = '#define VERT 1\n#define vert_main main\n';
-        const fragHeader = '#define FRAG 1\n#define frag_main main\n';
+        const vertHeader = '#version 300 es\n#define VERT 1\n#define vert_main main\n#define varying out';
+        const fragHeader = '#version 300 es\n#define FRAG 1\n#define frag_main main\n#define varying in';
         const v = fetch(filename);
         const fullVert = vertHeader + v;
         const fullFrag = fragHeader + v;
