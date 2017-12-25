@@ -48,3 +48,5 @@ Temporary Items
 
 assets
 *.blend
+
+node_modules
