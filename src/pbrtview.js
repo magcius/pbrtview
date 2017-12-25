@@ -120,7 +120,7 @@
 
         const plane = new Models.Plane(gl);
         plane.setMaterial(new Models.PBRMaterial(gl, [0.2, 0.2, 0.2], 1.0));
-        mat4.scale(plane.localMatrix, plane.localMatrix, [200, 1, 200]);
+        mat4.scale(plane.localMatrix, plane.localMatrix, [200, 200, 200]);
         scene.attachModel(plane);
 
         window.lights = lights;

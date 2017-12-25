@@ -255,12 +255,6 @@
             const mdlMtx = mat4.create();
             this.applyModelMatrix(mdlMtx);
             gl.uniformMatrix4fv(prog.uniforms.localMatrix, false, mdlMtx);
-            const mtx = mat4.create();
-
-            mat4.multiply(mtx, ctx.view, mdlMtx);
-            mat4.invert(mtx, mtx);
-            mat4.transpose(mtx, mtx);
-            gl.uniformMatrix4fv(prog.uniforms.normalMatrix, false, mtx);
 
             gl.bindBuffer(gl.ARRAY_BUFFER, this._vertBuffer);
             gl.vertexAttribPointer(prog.attribs.position, 3, gl.FLOAT, false, 0, 0);
@@ -308,7 +302,6 @@
         prog.uniforms.projection = gl.getUniformLocation(prog, "u_projection");
         prog.uniforms.localMatrix = gl.getUniformLocation(prog, "u_localMatrix");
         prog.uniforms.viewMatrix = gl.getUniformLocation(prog, "u_viewMatrix");
-        prog.uniforms.normalMatrix = gl.getUniformLocation(prog, "u_normalMatrix");
         prog.uniforms.diffuseColor = gl.getUniformLocation(prog, "u_material.diffuseColor");
         prog.uniforms.roughness = gl.getUniformLocation(prog, "u_material.roughness");
 

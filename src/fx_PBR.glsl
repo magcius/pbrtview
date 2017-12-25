@@ -27,7 +27,7 @@ uniform sampler2DShadow u_lights_shadowMap[NUM_LIGHTS];
 
 varying vec4 v_positionWorld;
 varying vec4 v_positionEye;
-varying vec4 v_normalEye;
+varying vec3 v_normalEye;
 varying vec2 v_uv;
 
 varying vec4 v_lights_positionEye[NUM_LIGHTS];
@@ -39,7 +39,7 @@ in vec3 a_normal;
 void main() {
     v_positionWorld = u_localMatrix * vec4(a_position, 1);
     v_positionEye = u_viewMatrix * v_positionWorld;
-    v_normalEye = u_normalMatrix * vec4(a_normal, 1);
+    v_normalEye = mat3(u_viewMatrix * u_localMatrix) * a_normal;
     gl_Position = u_projection * v_positionEye;
     v_uv = (a_position.xz + 1.0) / 2.0;
 
