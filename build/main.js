@@ -58,6 +58,7 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                     for (var _i = 0; _i < arguments.length; _i++) {
                         args[_i] = arguments[_i];
                     }
+                    this.loaded = false;
                     this.set.apply(this, __spread(args));
                 }
                 Program.prototype.set = function () {
@@ -90,28 +91,37 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                     var fullVert = vertHeader + str;
                     var fullFrag = fragHeader + str;
                     this.compileShaders(gl, prog, fullVert, fullFrag);
+                    this.bind(gl, prog);
                 };
                 Program.prototype._fetch = function (path) {
                     var request = new XMLHttpRequest();
-                    request.open("GET", "src/" + path, false);
+                    request.open("GET", "src/" + path, true);
                     request.overrideMimeType('text/plain');
                     request.send();
-                    return request.responseText;
+                    return request;
                 };
                 Program.prototype.compileProgramFromURL = function (gl, prog, filename) {
-                    var v = this._fetch(filename);
-                    return this.compileProgramFromStr(gl, prog, v);
+                    var _this = this;
+                    var req = this._fetch(filename);
+                    req.onload = function () {
+                        _this.compileProgramFromStr(gl, prog, req.responseText);
+                    };
                 };
                 Program.prototype.bind = function (gl, prog) {
+                    this.loaded = true;
                     this.u_projection = gl.getUniformLocation(prog, "u_projection");
                     this.u_viewMatrix = gl.getUniformLocation(prog, "u_viewMatrix");
                 };
-                Program.prototype.compile = function (gl) {
-                    if (!this.glProg) {
-                        this.glProg = gl.createProgram();
-                        this.compileProgram(gl, this.glProg);
-                        this.bind(gl, this.glProg);
-                    }
+                Program.prototype.load = function (gl) {
+                    if (this.loaded)
+                        return true;
+                    if (this.glProg)
+                        return false;
+                    this.glProg = gl.createProgram();
+                    this.compileProgram(gl, this.glProg);
+                    return false;
+                };
+                Program.prototype.getProgram = function () {
                     return this.glProg;
                 };
                 return Program;
@@ -155,7 +165,7 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                 RenderState.prototype.useProgram = function (prog) {
                     var gl = this.gl;
                     this.currentProgram = prog;
-                    gl.useProgram(prog.compile(gl));
+                    gl.useProgram(prog.getProgram());
                     gl.uniformMatrix4fv(prog.u_projection, false, this.projection);
                     gl.uniformMatrix4fv(prog.u_viewMatrix, false, this.view);
                 };
@@ -190,7 +200,8 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                         // Shadow map.
                         for (var _a = __values(scene.lights), _b = _a.next(); !_b.done; _b = _a.next()) {
                             var light = _b.value;
-                            light.renderShadowMapPrologue(renderState, scene);
+                            if (!light.renderShadowMapPrologue(renderState, scene))
+                                continue;
                             renderState.forceMaterial = true;
                             try {
                                 for (var _c = __values(scene.models), _d = _c.next(); !_d.done; _d = _c.next()) {
@@ -283,6 +294,8 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                     this.shadowMapView = gl_matrix_1.mat4.create();
                 }
                 PointLight.prototype.renderShadowMapPrologue = function (renderState, scene) {
+                    if (!this.shadowMapProgram.load(renderState.gl))
+                        return false;
                     var gl = renderState.gl;
                     renderState.useProgram(this.shadowMapProgram);
                     gl.bindFramebuffer(gl.FRAMEBUFFER, this.shadowMapFramebuffer);
@@ -297,6 +310,7 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                     gl_matrix_1.mat4.rotateX(this.shadowMapView, this.shadowMapView, TAU / 4);
                     gl_matrix_1.mat4.translate(this.shadowMapView, this.shadowMapView, [-pos[0], -pos[1], -pos[2]]);
                     gl.uniformMatrix4fv(prog.u_viewMatrix, false, this.shadowMapView);
+                    return true;
                 };
                 PointLight.prototype.renderShadowMapEpilogue = function (renderState, scene) {
                     var gl = renderState.gl;
@@ -405,6 +419,8 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                 BaseModel.prototype.render = function (renderState, scene) {
                     var _this = this;
                     if (!this.loaded)
+                        return;
+                    if (!this.material.load(renderState.gl))
                         return;
                     renderState.useMaterial(this.material, scene);
                     this._renderPrologue(renderState, scene);

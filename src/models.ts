@@ -11,6 +11,7 @@ abstract class Program {
     public u_viewMatrix: WebGLUniformLocation;
 
     private glProg: WebGLProgram;
+    private loaded: boolean = false;
 
     constructor(...args) {
         this.set(...args);
@@ -47,39 +48,51 @@ abstract class Program {
         const fullVert = vertHeader + str;
         const fullFrag = fragHeader + str;
         this.compileShaders(gl, prog, fullVert, fullFrag);
+        this.bind(gl, prog);
     }
 
-    private _fetch(path: string) {
+    private _fetch(path: string): XMLHttpRequest {
         const request = new XMLHttpRequest();
-        request.open("GET", `src/${path}`, false);
+        request.open("GET", `src/${path}`, true);
         request.overrideMimeType('text/plain');
         request.send();
-        return request.responseText;
+        return request;
     }
 
     protected compileProgramFromURL(gl: WebGL2RenderingContext, prog: WebGLProgram, filename: string) {
-        const v = this._fetch(filename);
-        return this.compileProgramFromStr(gl, prog, v);
+        const req = this._fetch(filename);
+        req.onload = () => {
+            this.compileProgramFromStr(gl, prog, req.responseText);
+        };
     }
 
     protected abstract compileProgram(gl: WebGL2RenderingContext, prog: WebGLProgram);
 
     protected bind(gl: WebGL2RenderingContext, prog: WebGLProgram) {
+        this.loaded = true;
         this.u_projection = gl.getUniformLocation(prog, "u_projection");
         this.u_viewMatrix = gl.getUniformLocation(prog, "u_viewMatrix");
     }
 
-    public compile(gl: WebGL2RenderingContext): WebGLProgram {
-        if (!this.glProg) {
-            this.glProg = gl.createProgram();
-            this.compileProgram(gl, this.glProg);
-            this.bind(gl, this.glProg);
-        }
+    public load(gl: WebGL2RenderingContext): boolean {
+        if (this.loaded)
+            return true;
+        if (this.glProg)
+            return false;
+
+        this.glProg = gl.createProgram();
+        this.compileProgram(gl, this.glProg);
+
+        return false;
+    }
+
+    public getProgram(): WebGLProgram {
         return this.glProg;
     }
 }
 
 interface IMaterial {
+    load(gl: WebGL2RenderingContext): boolean;
     renderPrologue(renderState: RenderState, scene: Scene);
 }
 
@@ -127,7 +140,7 @@ export class RenderState {
     public useProgram(prog: Program) {
         const gl = this.gl;
         this.currentProgram = prog;
-        gl.useProgram(prog.compile(gl));
+        gl.useProgram(prog.getProgram());
         gl.uniformMatrix4fv(prog.u_projection, false, this.projection);
         gl.uniformMatrix4fv(prog.u_viewMatrix, false, this.view);
     }
@@ -145,8 +158,8 @@ export class RenderState {
 }
 
 interface ILight {
-    renderShadowMapPrologue(renderState: RenderState, scene: Scene);
-    renderShadowMapEpilogue(renderState: RenderState, scene: Scene);
+    renderShadowMapPrologue(renderState: RenderState, scene: Scene): boolean;
+    renderShadowMapEpilogue(renderState: RenderState, scene: Scene): void;
 }
 interface IModel {
     parentGroup: Group;
@@ -173,7 +186,8 @@ export class Renderer {
 
         // Shadow map.
         for (const light of scene.lights) {
-            light.renderShadowMapPrologue(renderState, scene);
+            if (!light.renderShadowMapPrologue(renderState, scene))
+                continue;
 
             renderState.forceMaterial = true;
             for (const model of scene.models) {
@@ -256,7 +270,10 @@ export class PointLight implements ILight {
         this.shadowMapView = mat4.create();
     }
 
-    renderShadowMapPrologue(renderState: RenderState, scene: Scene) {
+    renderShadowMapPrologue(renderState: RenderState, scene: Scene): boolean {
+        if (!this.shadowMapProgram.load(renderState.gl))
+            return false;
+
         const gl = renderState.gl;
         renderState.useProgram(this.shadowMapProgram);
         gl.bindFramebuffer(gl.FRAMEBUFFER, this.shadowMapFramebuffer);
@@ -273,6 +290,7 @@ export class PointLight implements ILight {
         mat4.rotateX(this.shadowMapView, this.shadowMapView, TAU / 4);
         mat4.translate(this.shadowMapView, this.shadowMapView, [-pos[0], -pos[1], -pos[2]]);
         gl.uniformMatrix4fv(prog.u_viewMatrix, false, this.shadowMapView);
+        return true;
     }
 
     renderShadowMapEpilogue(renderState: RenderState, scene: Scene) {
@@ -415,6 +433,9 @@ abstract class BaseModel implements IModel {
 
     render(renderState: RenderState, scene: Scene) {
         if (!this.loaded)
+            return;
+
+        if (!this.material.load(renderState.gl))
             return;
 
         renderState.useMaterial(this.material, scene);
