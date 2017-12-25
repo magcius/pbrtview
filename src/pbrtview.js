@@ -97,31 +97,28 @@
     }
 
     function createViewer(canvas) {
-        var gl = canvas.getContext("webgl2", { alpha: false });
+        const gl = canvas.getContext("webgl2", { alpha: false });
 
-        gl.viewportWidth = canvas.width;
-        gl.viewportHeight = canvas.height;
-
-        var scene = new Models.Scene(gl);
-        var lights = [
+        const scene = new Models.Scene(gl);
+        const lights = [
             new Models.Light(gl, [0, 50, 0], [1, .6, .6], 4, 100),
             new Models.Light(gl, [0, 45, 0], [.6, 1, .6], 4, 125),
             new Models.Light(gl, [0, 55, 0], [.6, .6, 1], 4, 150),
         ];
         scene.setLights(lights);
 
-        var eh_t = new Models.JMDL(gl, 'eh_t.jmdl');
+        const eh_t = new Models.JMDL(gl, 'eh_t.jmdl');
         eh_t.setMaterial(new Models.PBRMaterial(gl, [0.2, 0.2, 0.2], 0.1));
-        var eh_b = new Models.JMDL(gl, 'eh_b.jmdl');
+        const eh_b = new Models.JMDL(gl, 'eh_b.jmdl');
         eh_b.setMaterial(new Models.PBRMaterial(gl, [0.2, 0.05, 0.05], 0.5));
 
-        var eh1 = new Models.Group();
+        const eh1 = new Models.Group();
         mat4.scale(eh1.localMatrix, eh1.localMatrix, [2, 2, 2]);
         eh1.attachModel(eh_t);
         eh1.attachModel(eh_b);
         scene.attachModel(eh1);
 
-        var plane = new Models.Plane(gl);
+        const plane = new Models.Plane(gl);
         plane.setMaterial(new Models.PBRMaterial(gl, [0.2, 0.2, 0.2], 1.0));
         mat4.scale(plane.localMatrix, plane.localMatrix, [200, 1, 200]);
         scene.attachModel(plane);
@@ -132,14 +129,22 @@
             scene.attachModel(light.bb);
         });
 
-        var t = 0;
+        let t = 0;
 
-        var camera = mat4.create();
+        const camera = mat4.create();
         scene.setCamera(camera);
-        var updateCameraController = cameraController(canvas);
+        const updateCameraController = cameraController(canvas);
+
+        function checkResize() {
+            gl.viewportWidth = canvas.width;
+            gl.viewportHeight = canvas.height;
+            scene.checkResize();
+        }
 
         function update(nt) {
             t = nt;
+
+            checkResize();
 
             lights[0].position[0] = Math.cos(t / 890) * 30;
             lights[0].position[2] = Math.sin(t / 730) * 30;
@@ -162,9 +167,24 @@
         update(0);
     }
 
+    class Main {
+        constructor() {
+            this.canvas = document.createElement('canvas');
+            document.body.appendChild(this.canvas);
+            window.onresize = this._onResize.bind(this);
+            this._onResize();
+
+            createViewer(this.canvas);
+        }
+
+        _onResize() {
+            this.canvas.width = window.innerWidth;
+            this.canvas.height = window.innerHeight;
+        }
+    }
+
     window.addEventListener('load', function() {
-        var canvas = document.querySelector("canvas");
-        createViewer(canvas);
+        window.main = new Main();
     });
 
 })(window);

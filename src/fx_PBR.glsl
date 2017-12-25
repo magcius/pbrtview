@@ -117,7 +117,6 @@ vec3 light_getReflectedLight(const in int lightIndex) {
     float NoL = clamp(dot(N, L), 0.0, 1.0);
     vec3 diffuse = u_material.diffuseColor;
     vec3 specular = brdf_Specular_GGX(N, L, V, u_material.roughness);
-    return specular;
     vec3 directIrradiance = lightColor * NoL;
 
     // Technically not energy-conserving, since we add the same light

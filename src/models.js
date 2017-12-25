@@ -39,7 +39,7 @@
             this._view = mat4.create();
 
             this._projection = mat4.create();
-            mat4.perspective(this._projection, TAU / 8, gl.viewportWidth / gl.viewportHeight, 1.0, 1024);
+            this.checkResize();
 
             this._renderCtx = new RenderContext(gl);
             this._renderCtx.view = this._view;
@@ -48,6 +48,10 @@
             this.models = [];
         }
 
+        checkResize() {
+            const gl = this._gl;
+            mat4.perspective(this._projection, TAU / 8, gl.viewportWidth / gl.viewportHeight, 1.0, 1024);
+        }
         setCamera(mat) {
             mat4.copy(this._view, mat);
         }
