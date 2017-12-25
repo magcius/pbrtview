@@ -41,7 +41,7 @@ var __values = (this && this.__values) || function (o) {
 System.register("models", ["gl-matrix"], function (exports_1, context_1) {
     "use strict";
     var __moduleName = context_1 && context_1.id;
-    var gl_matrix_1, TAU, VERT_N_ITEMS, VERT_N_BYTES, Program, Viewport, RenderState, Camera, Scene, Renderer, ShadowMapProgram, SHADOW_MAP_SIZE, PointLight, Group, BaseModel, PBRMaterial, JMDL, Plane, LightBillboardMaterial, LightBillboard;
+    var gl_matrix_1, TAU, VERT_N_ITEMS, VERT_N_BYTES, Program, ModelProgram, Viewport, RenderState, Camera, Scene, PassFramebuffer, PostPassProgram, PostPassProgram_Vignette, PostPassProgram_ChromaAberration, PostPass, Renderer, ShadowMapProgram, SHADOW_MAP_SIZE, PointLight, Group, BaseModel, PBRMaterial, JMDL, Plane, LightBillboardMaterial, LightBillboard;
     return {
         setters: [
             function (gl_matrix_1_1) {
@@ -109,8 +109,6 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                 };
                 Program.prototype.bind = function (gl, prog) {
                     this.loaded = true;
-                    this.u_projection = gl.getUniformLocation(prog, "u_projection");
-                    this.u_viewMatrix = gl.getUniformLocation(prog, "u_viewMatrix");
                 };
                 Program.prototype.load = function (gl) {
                     if (this.loaded)
@@ -126,6 +124,18 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                 };
                 return Program;
             }());
+            ModelProgram = /** @class */ (function (_super) {
+                __extends(ModelProgram, _super);
+                function ModelProgram() {
+                    return _super !== null && _super.apply(this, arguments) || this;
+                }
+                ModelProgram.prototype.bind = function (gl, prog) {
+                    _super.prototype.bind.call(this, gl, prog);
+                    this.u_projection = gl.getUniformLocation(prog, "u_projection");
+                    this.u_viewMatrix = gl.getUniformLocation(prog, "u_viewMatrix");
+                };
+                return ModelProgram;
+            }(Program));
             Viewport = /** @class */ (function () {
                 function Viewport(canvas) {
                     this.canvas = canvas;
@@ -156,11 +166,10 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                     this.gl = this.viewport.gl;
                     this.time = 0;
                 }
-                RenderState.prototype.useProgram = function (prog, scene) {
+                RenderState.prototype.useProgram = function (prog) {
                     var gl = this.gl;
                     this.currentProgram = prog;
                     gl.useProgram(prog.getProgram());
-                    scene.camera.bind(this, scene);
                 };
                 RenderState.prototype.useMaterial = function (material, scene) {
                     if (this.forceMaterial)
@@ -180,7 +189,7 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                     var aspect = viewport.width / viewport.height;
                     gl_matrix_1.mat4.perspective(this.projection, Math.PI / 4, aspect, 0.2, 50000);
                 };
-                Camera.prototype.bind = function (renderState, scene) {
+                Camera.prototype.renderPrologue = function (renderState, scene) {
                     var gl = renderState.gl;
                     var prog = renderState.currentProgram;
                     gl.uniformMatrix4fv(prog.u_projection, false, this.projection);
@@ -198,66 +207,233 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                 return Scene;
             }());
             exports_1("Scene", Scene);
+            PassFramebuffer = /** @class */ (function () {
+                function PassFramebuffer() {
+                    this.scale = 1.0;
+                }
+                PassFramebuffer.prototype.checkResize = function (renderState) {
+                    var gl = renderState.gl;
+                    var width = renderState.viewport.width * this.scale;
+                    var height = renderState.viewport.height * this.scale;
+                    if (this.width !== undefined && this.width === width && this.height === height)
+                        return;
+                    this.width = width;
+                    this.height = height;
+                    if (this.framebuffer) {
+                        gl.deleteFramebuffer(this.framebuffer);
+                        gl.deleteTexture(this.colorTex);
+                        gl.deleteRenderbuffer(this.depthRenderbuffer);
+                    }
+                    this.colorTex = gl.createTexture();
+                    gl.bindTexture(gl.TEXTURE_2D, this.colorTex);
+                    gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, width, height);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                    this.depthRenderbuffer = gl.createRenderbuffer();
+                    gl.bindRenderbuffer(gl.RENDERBUFFER, this.depthRenderbuffer);
+                    gl.renderbufferStorageMultisample(gl.RENDERBUFFER, 0, gl.DEPTH_COMPONENT16, width, height);
+                    this.framebuffer = gl.createFramebuffer();
+                    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.framebuffer);
+                    gl.framebufferTexture2D(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.colorTex, 0);
+                    gl.framebufferRenderbuffer(gl.DRAW_FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, this.depthRenderbuffer);
+                    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
+                };
+                PassFramebuffer.prototype.setActive = function (renderState) {
+                    var gl = renderState.gl;
+                    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.framebuffer);
+                    gl.viewport(0, 0, this.width, this.height);
+                };
+                return PassFramebuffer;
+            }());
+            PostPassProgram = /** @class */ (function (_super) {
+                __extends(PostPassProgram, _super);
+                function PostPassProgram() {
+                    return _super !== null && _super.apply(this, arguments) || this;
+                }
+                PostPassProgram.prototype.bind = function (gl, prog) {
+                    _super.prototype.bind.call(this, gl, prog);
+                    this.u_tex = gl.getUniformLocation(prog, 'u_tex');
+                    this.a_position = gl.getAttribLocation(prog, 'a_position');
+                    this.a_uv = gl.getAttribLocation(prog, 'a_uv');
+                };
+                return PostPassProgram;
+            }(Program));
+            PostPassProgram_Vignette = /** @class */ (function (_super) {
+                __extends(PostPassProgram_Vignette, _super);
+                function PostPassProgram_Vignette() {
+                    return _super !== null && _super.apply(this, arguments) || this;
+                }
+                PostPassProgram_Vignette.prototype.compileProgram = function (gl, prog) {
+                    this.compileProgramFromURL(gl, prog, 'fx_PostVignette.glsl');
+                };
+                return PostPassProgram_Vignette;
+            }(PostPassProgram));
+            exports_1("PostPassProgram_Vignette", PostPassProgram_Vignette);
+            PostPassProgram_ChromaAberration = /** @class */ (function (_super) {
+                __extends(PostPassProgram_ChromaAberration, _super);
+                function PostPassProgram_ChromaAberration() {
+                    return _super !== null && _super.apply(this, arguments) || this;
+                }
+                PostPassProgram_ChromaAberration.prototype.compileProgram = function (gl, prog) {
+                    this.compileProgramFromURL(gl, prog, 'fx_PostChromaAberration.glsl');
+                };
+                return PostPassProgram_ChromaAberration;
+            }(PostPassProgram));
+            exports_1("PostPassProgram_ChromaAberration", PostPassProgram_ChromaAberration);
+            PostPass = /** @class */ (function () {
+                function PostPass(program) {
+                    this.program = program;
+                    this.framebuffer = new PassFramebuffer();
+                }
+                PostPass.prototype.setBuffers = function (renderState) {
+                    if (this.vertBuffer)
+                        return;
+                    var vtx = new Float32Array(6);
+                    vtx[0] = -1.0;
+                    vtx[1] = -1.0;
+                    vtx[2] = 3.0;
+                    vtx[3] = -1.0;
+                    vtx[4] = -1.0;
+                    vtx[5] = 3.0;
+                    var gl = renderState.gl;
+                    this.vertBuffer = gl.createBuffer();
+                    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertBuffer);
+                    gl.bufferData(gl.ARRAY_BUFFER, vtx, gl.STATIC_DRAW);
+                    var uv = new Float32Array(6);
+                    uv[0] = 0.0;
+                    uv[1] = 0.0;
+                    uv[2] = 2.0;
+                    uv[3] = 0.0;
+                    uv[4] = 0.0;
+                    uv[5] = 2.0;
+                    this.uvBuffer = gl.createBuffer();
+                    gl.bindBuffer(gl.ARRAY_BUFFER, this.uvBuffer);
+                    gl.bufferData(gl.ARRAY_BUFFER, uv, gl.STATIC_DRAW);
+                };
+                PostPass.prototype.bind = function (renderState) {
+                    this.setBuffers(renderState);
+                };
+                PostPass.prototype.checkResize = function (renderState) {
+                    this.framebuffer.checkResize(renderState);
+                };
+                PostPass.prototype.load = function (renderState) {
+                    return this.program.load(renderState.gl);
+                };
+                PostPass.prototype.drawQuad = function (renderState) {
+                    var gl = renderState.gl;
+                    renderState.useProgram(this.program);
+                    gl.disable(gl.DEPTH_TEST);
+                    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertBuffer);
+                    gl.vertexAttribPointer(this.program.a_position, 2, gl.FLOAT, false, 0, 0);
+                    gl.enableVertexAttribArray(this.program.a_position);
+                    gl.bindBuffer(gl.ARRAY_BUFFER, this.uvBuffer);
+                    gl.vertexAttribPointer(this.program.a_uv, 2, gl.FLOAT, false, 0, 0);
+                    gl.enableVertexAttribArray(this.program.a_uv);
+                    gl.uniform1i(this.program.u_tex, 0);
+                    gl.drawArrays(gl.TRIANGLES, 0, 3);
+                };
+                return PostPass;
+            }());
             Renderer = /** @class */ (function () {
                 function Renderer(viewport) {
+                    this.postPasses = [];
                     this.renderState = new RenderState(viewport);
+                    this.postPasses.push(new PostPass(new PostPassProgram_ChromaAberration()));
+                    this.postPasses.push(new PostPass(new PostPassProgram_Vignette()));
                 }
                 Renderer.prototype.render = function (scene) {
                     var gl = this.renderState.gl;
                     var renderState = this.renderState;
+                    // Load our post passes.
+                    var postPasses = this.postPasses.filter(function (postPass) { return postPass.load(renderState); });
                     try {
-                        // Shadow map.
-                        for (var _a = __values(scene.lights), _b = _a.next(); !_b.done; _b = _a.next()) {
-                            var light = _b.value;
+                        for (var postPasses_1 = __values(postPasses), postPasses_1_1 = postPasses_1.next(); !postPasses_1_1.done; postPasses_1_1 = postPasses_1.next()) {
+                            var postPass = postPasses_1_1.value;
+                            postPass.bind(renderState);
+                            postPass.checkResize(renderState);
+                        }
+                    }
+                    catch (e_1_1) { e_1 = { error: e_1_1 }; }
+                    finally {
+                        try {
+                            if (postPasses_1_1 && !postPasses_1_1.done && (_a = postPasses_1.return)) _a.call(postPasses_1);
+                        }
+                        finally { if (e_1) throw e_1.error; }
+                    }
+                    try {
+                        // Shadow maps.
+                        for (var _b = __values(scene.lights), _c = _b.next(); !_c.done; _c = _b.next()) {
+                            var light = _c.value;
                             if (!light.renderShadowMapPrologue(renderState, scene))
                                 continue;
                             renderState.forceMaterial = true;
                             try {
-                                for (var _c = __values(scene.models), _d = _c.next(); !_d.done; _d = _c.next()) {
-                                    var model = _d.value;
+                                for (var _d = __values(scene.models), _e = _d.next(); !_e.done; _e = _d.next()) {
+                                    var model = _e.value;
                                     if (model.castsShadow)
                                         model.render(renderState, scene);
                                 }
                             }
-                            catch (e_1_1) { e_1 = { error: e_1_1 }; }
+                            catch (e_2_1) { e_2 = { error: e_2_1 }; }
                             finally {
                                 try {
-                                    if (_d && !_d.done && (_e = _c.return)) _e.call(_c);
+                                    if (_e && !_e.done && (_f = _d.return)) _f.call(_d);
                                 }
-                                finally { if (e_1) throw e_1.error; }
+                                finally { if (e_2) throw e_2.error; }
                             }
                             renderState.forceMaterial = false;
                             light.renderShadowMapEpilogue(renderState, scene);
                         }
                     }
-                    catch (e_2_1) { e_2 = { error: e_2_1 }; }
+                    catch (e_3_1) { e_3 = { error: e_3_1 }; }
                     finally {
                         try {
-                            if (_b && !_b.done && (_f = _a.return)) _f.call(_a);
+                            if (_c && !_c.done && (_g = _b.return)) _g.call(_b);
                         }
-                        finally { if (e_2) throw e_2.error; }
+                        finally { if (e_3) throw e_3.error; }
                     }
                     // "Normal" render.
-                    scene.camera.checkResize(renderState, scene);
+                    // Set up our first post pass, if we have any.
                     gl.viewport(0, 0, this.renderState.viewport.width, this.renderState.viewport.height);
+                    if (postPasses[0]) {
+                        postPasses[0].framebuffer.setActive(renderState);
+                    }
+                    scene.camera.checkResize(renderState, scene);
                     gl.enable(gl.DEPTH_TEST);
                     gl.clearColor(0.88, 0.88, 0.88, 1);
                     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
                     gl.cullFace(gl.BACK);
                     try {
-                        for (var _g = __values(scene.models), _h = _g.next(); !_h.done; _h = _g.next()) {
-                            var model = _h.value;
+                        for (var _h = __values(scene.models), _j = _h.next(); !_j.done; _j = _h.next()) {
+                            var model = _j.value;
                             model.render(renderState, scene);
                         }
                     }
-                    catch (e_3_1) { e_3 = { error: e_3_1 }; }
+                    catch (e_4_1) { e_4 = { error: e_4_1 }; }
                     finally {
                         try {
-                            if (_h && !_h.done && (_j = _g.return)) _j.call(_g);
+                            if (_j && !_j.done && (_k = _h.return)) _k.call(_h);
                         }
-                        finally { if (e_3) throw e_3.error; }
+                        finally { if (e_4) throw e_4.error; }
                     }
-                    var e_2, _f, e_1, _e, e_3, _j;
+                    // Full-screen post passes.
+                    for (var i = 0; i < postPasses.length; i++) {
+                        var curPass = postPasses[i];
+                        var nextPass = postPasses[i + 1];
+                        if (nextPass) {
+                            nextPass.framebuffer.setActive(renderState);
+                        }
+                        else {
+                            gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
+                            gl.viewport(0, 0, this.renderState.viewport.width, this.renderState.viewport.height);
+                        }
+                        gl.activeTexture(gl.TEXTURE0 + 0);
+                        gl.bindTexture(gl.TEXTURE_2D, curPass.framebuffer.colorTex);
+                        curPass.drawQuad(renderState);
+                    }
+                    var e_1, _a, e_3, _g, e_2, _f, e_4, _k;
                 };
                 return Renderer;
             }());
@@ -276,7 +452,7 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                     this.a_position = gl.getAttribLocation(prog, 'a_position');
                 };
                 return ShadowMapProgram;
-            }(Program));
+            }(ModelProgram));
             SHADOW_MAP_SIZE = 1024;
             PointLight = /** @class */ (function () {
                 function PointLight(gl, position, color, intensity, radius) {
@@ -298,6 +474,7 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, this.shadowMapDepth, 0);
                     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
                     this.shadowMapProgram = new ShadowMapProgram();
+                    // TODO(jstpierre): Use Camera
                     this.shadowMapProjection = gl_matrix_1.mat4.create();
                     gl_matrix_1.mat4.perspective(this.shadowMapProjection, TAU / 4, 1.0, 1.0, 256);
                     this.shadowMapView = gl_matrix_1.mat4.create();
@@ -306,7 +483,7 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                     if (!this.shadowMapProgram.load(renderState.gl))
                         return false;
                     var gl = renderState.gl;
-                    renderState.useProgram(this.shadowMapProgram, scene);
+                    renderState.useProgram(this.shadowMapProgram);
                     gl.bindFramebuffer(gl.FRAMEBUFFER, this.shadowMapFramebuffer);
                     gl.viewport(0, 0, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
                     gl.colorMask(false, false, false, false);
@@ -433,6 +610,7 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                         return;
                     renderState.useMaterial(this.material, scene);
                     this._renderPrologue(renderState, scene);
+                    scene.camera.renderPrologue(renderState, scene);
                     this.primitives.forEach(function (prim) {
                         _this._renderPrimitive(renderState, prim);
                     });
@@ -473,7 +651,7 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                 };
                 PBRMaterial.prototype.renderPrologue = function (renderState, scene) {
                     var gl = renderState.gl;
-                    renderState.useProgram(this, scene);
+                    renderState.useProgram(this);
                     var setLight = function (glLight, mLight, i) {
                         gl.uniform3fv(glLight.position, mLight.position);
                         gl.uniform3fv(glLight.color, mLight.color);
@@ -495,7 +673,7 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                     this.roughness = roughness;
                 };
                 return PBRMaterial;
-            }(Program));
+            }(ModelProgram));
             exports_1("PBRMaterial", PBRMaterial);
             JMDL = /** @class */ (function (_super) {
                 __extends(JMDL, _super);
@@ -612,7 +790,7 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                 };
                 LightBillboardMaterial.prototype.renderPrologue = function (renderState, scene) {
                     var gl = renderState.gl;
-                    renderState.useProgram(this, scene);
+                    renderState.useProgram(this);
                     gl.uniform2fv(this.u_size, [1, 1]);
                     gl.uniform3fv(this.u_color, this.color);
                 };
@@ -620,7 +798,7 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                     gl_matrix_1.vec3.copy(this.color, color);
                 };
                 return LightBillboardMaterial;
-            }(Program));
+            }(ModelProgram));
             LightBillboard = /** @class */ (function (_super) {
                 __extends(LightBillboard, _super);
                 function LightBillboard() {

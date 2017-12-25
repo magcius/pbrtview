@@ -7,9 +7,6 @@ const VERT_N_ITEMS = 3;
 const VERT_N_BYTES = VERT_N_ITEMS * Float32Array.BYTES_PER_ELEMENT;
 
 abstract class Program {
-    public u_projection: WebGLUniformLocation;
-    public u_viewMatrix: WebGLUniformLocation;
-
     private glProg: WebGLProgram;
     private loaded: boolean = false;
 
@@ -70,8 +67,6 @@ abstract class Program {
 
     protected bind(gl: WebGL2RenderingContext, prog: WebGLProgram) {
         this.loaded = true;
-        this.u_projection = gl.getUniformLocation(prog, "u_projection");
-        this.u_viewMatrix = gl.getUniformLocation(prog, "u_viewMatrix");
     }
 
     public load(gl: WebGL2RenderingContext): boolean {
@@ -88,6 +83,17 @@ abstract class Program {
 
     public getProgram(): WebGLProgram {
         return this.glProg;
+    }
+}
+
+abstract class ModelProgram extends Program {
+    public u_projection: WebGLUniformLocation;
+    public u_viewMatrix: WebGLUniformLocation;
+
+    protected bind(gl: WebGL2RenderingContext, prog: WebGLProgram) {
+        super.bind(gl, prog);
+        this.u_projection = gl.getUniformLocation(prog, "u_projection");
+        this.u_viewMatrix = gl.getUniformLocation(prog, "u_viewMatrix");
     }
 }
 
@@ -127,11 +133,10 @@ export class RenderState {
         this.time = 0;
     }
 
-    public useProgram(prog: Program, scene: Scene) {
+    public useProgram(prog: Program) {
         const gl = this.gl;
         this.currentProgram = prog;
         gl.useProgram(prog.getProgram());
-        scene.camera.bind(this, scene);
     }
 
     public useMaterial(material: IMaterial, scene: Scene) {
@@ -167,9 +172,9 @@ export class Camera {
         mat4.perspective(this.projection, Math.PI / 4, aspect, 0.2, 50000);
     }
 
-    public bind(renderState: RenderState, scene: Scene) {
+    public renderPrologue(renderState: RenderState, scene: Scene) {
         const gl = renderState.gl;
-        const prog = renderState.currentProgram;
+        const prog = renderState.currentProgram as ModelProgram;
         gl.uniformMatrix4fv(prog.u_projection, false, this.projection);
         gl.uniformMatrix4fv(prog.u_viewMatrix, false, this.view);
     }
@@ -182,18 +187,177 @@ export class Scene {
     public models: IModel[] = [];
 }
 
+class PassFramebuffer {
+    public colorTex: WebGLTexture;
+    public depthRenderbuffer: WebGLRenderbuffer;
+
+    public scale: number = 1.0;
+
+    private framebuffer: WebGLFramebuffer;
+    private width: number;
+    private height: number;
+
+    checkResize(renderState: RenderState) {
+        const gl = renderState.gl;
+
+        const width = renderState.viewport.width * this.scale;
+        const height = renderState.viewport.height * this.scale;
+
+        if (this.width !== undefined && this.width === width && this.height === height)
+            return;
+
+        this.width = width;
+        this.height = height;
+
+        if (this.framebuffer) {
+            gl.deleteFramebuffer(this.framebuffer);
+            gl.deleteTexture(this.colorTex);
+            gl.deleteRenderbuffer(this.depthRenderbuffer);
+        }
+
+        this.colorTex = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, this.colorTex);
+        gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, width, height);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+        this.depthRenderbuffer = gl.createRenderbuffer();
+        gl.bindRenderbuffer(gl.RENDERBUFFER, this.depthRenderbuffer);
+        gl.renderbufferStorageMultisample(gl.RENDERBUFFER, 0, gl.DEPTH_COMPONENT16, width, height);
+
+        this.framebuffer = gl.createFramebuffer();
+        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.framebuffer);
+        gl.framebufferTexture2D(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.colorTex, 0);
+        gl.framebufferRenderbuffer(gl.DRAW_FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, this.depthRenderbuffer);
+        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
+    }
+
+    setActive(renderState: RenderState) {
+        const gl = renderState.gl;
+        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.framebuffer);
+        gl.viewport(0, 0, this.width, this.height);
+    }
+}
+
+abstract class PostPassProgram extends Program {
+    public u_tex: WebGLUniformLocation;
+    public a_position: number;
+    public a_uv: number;
+
+    public bind(gl: WebGL2RenderingContext, prog: WebGLProgram) {
+        super.bind(gl, prog);
+        this.u_tex = gl.getUniformLocation(prog, 'u_tex');
+        this.a_position = gl.getAttribLocation(prog, 'a_position');
+        this.a_uv = gl.getAttribLocation(prog, 'a_uv');
+    }
+}
+
+export class PostPassProgram_Vignette extends PostPassProgram {
+    public compileProgram(gl:WebGL2RenderingContext, prog:WebGLProgram) {
+        this.compileProgramFromURL(gl, prog, 'fx_PostVignette.glsl');
+    }
+}
+
+export class PostPassProgram_ChromaAberration extends PostPassProgram {
+    public compileProgram(gl:WebGL2RenderingContext, prog:WebGLProgram) {
+        this.compileProgramFromURL(gl, prog, 'fx_PostChromaAberration.glsl');
+    }
+}
+
+class PostPass {
+    public framebuffer: PassFramebuffer;
+    private program: PostPassProgram;
+
+    private vertBuffer: WebGLBuffer;
+    private uvBuffer: WebGLBuffer;
+
+    constructor(program: PostPassProgram) {
+        this.program = program;
+        this.framebuffer = new PassFramebuffer();
+    }
+
+    private setBuffers(renderState: RenderState) {
+        if (this.vertBuffer)
+            return;
+
+        const vtx = new Float32Array(6);
+        vtx[0] = -1.0;
+        vtx[1] = -1.0;
+        vtx[2] = 3.0;
+        vtx[3] = -1.0;
+        vtx[4] = -1.0;
+        vtx[5] = 3.0;
+
+        const gl = renderState.gl;
+        this.vertBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.vertBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, vtx, gl.STATIC_DRAW);
+
+        const uv = new Float32Array(6);
+        uv[0] = 0.0;
+        uv[1] = 0.0;
+        uv[2] = 2.0;
+        uv[3] = 0.0;
+        uv[4] = 0.0;
+        uv[5] = 2.0;
+
+        this.uvBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.uvBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, uv, gl.STATIC_DRAW);
+    }
+
+    public bind(renderState: RenderState) {
+        this.setBuffers(renderState);
+    }
+
+    public checkResize(renderState: RenderState) {
+        this.framebuffer.checkResize(renderState);
+    }
+
+    public load(renderState: RenderState): boolean {
+        return this.program.load(renderState.gl);
+    }
+
+    public drawQuad(renderState: RenderState) {
+        const gl = renderState.gl;
+        renderState.useProgram(this.program);
+        gl.disable(gl.DEPTH_TEST);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.vertBuffer);
+        gl.vertexAttribPointer(this.program.a_position, 2, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(this.program.a_position);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.uvBuffer);
+        gl.vertexAttribPointer(this.program.a_uv, 2, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(this.program.a_uv);
+        gl.uniform1i(this.program.u_tex, 0);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
+}
+
 export class Renderer {
     public renderState: RenderState;
+    public postPasses: PostPass[] = [];
 
     constructor(viewport: Viewport) {
         this.renderState = new RenderState(viewport);
+        this.postPasses.push(new PostPass(new PostPassProgram_ChromaAberration()));
+        this.postPasses.push(new PostPass(new PostPassProgram_Vignette()));
     }
 
     public render(scene: Scene): void {
         const gl = this.renderState.gl;
         const renderState = this.renderState;
 
-        // Shadow map.
+        // Load our post passes.
+        const postPasses = this.postPasses.filter((postPass) => postPass.load(renderState));
+
+        for (const postPass of postPasses) {
+            postPass.bind(renderState);
+            postPass.checkResize(renderState);
+        }
+
+        // Shadow maps.
         for (const light of scene.lights) {
             if (!light.renderShadowMapPrologue(renderState, scene))
                 continue;
@@ -209,8 +373,15 @@ export class Renderer {
         }
 
         // "Normal" render.
-        scene.camera.checkResize(renderState, scene);
+
+        // Set up our first post pass, if we have any.
         gl.viewport(0, 0, this.renderState.viewport.width, this.renderState.viewport.height);
+
+        if (postPasses[0]) {
+            postPasses[0].framebuffer.setActive(renderState);
+        }
+
+        scene.camera.checkResize(renderState, scene);
 
         gl.enable(gl.DEPTH_TEST);
         gl.clearColor(0.88, 0.88, 0.88, 1);
@@ -220,10 +391,26 @@ export class Renderer {
         for (const model of scene.models) {
             model.render(renderState, scene);
         }
+
+        // Full-screen post passes.
+        for (let i = 0; i < postPasses.length; i++) {
+            const curPass = postPasses[i];
+            const nextPass = postPasses[i + 1];
+            if (nextPass) {
+                nextPass.framebuffer.setActive(renderState);
+            } else {
+                gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
+                gl.viewport(0, 0, this.renderState.viewport.width, this.renderState.viewport.height);
+            }
+
+            gl.activeTexture(gl.TEXTURE0 + 0);
+            gl.bindTexture(gl.TEXTURE_2D, curPass.framebuffer.colorTex);
+            curPass.drawQuad(renderState);
+        }
     }
 }
 
-class ShadowMapProgram extends Program {
+class ShadowMapProgram extends ModelProgram {
     public u_localMatrix: WebGLUniformLocation;
     public a_position: number;
 
@@ -273,9 +460,9 @@ export class PointLight implements ILight {
 
         this.shadowMapProgram = new ShadowMapProgram();
 
+        // TODO(jstpierre): Use Camera
         this.shadowMapProjection = mat4.create();
         mat4.perspective(this.shadowMapProjection, TAU / 4, 1.0, 1.0, 256);
-
         this.shadowMapView = mat4.create();
     }
 
@@ -284,7 +471,7 @@ export class PointLight implements ILight {
             return false;
 
         const gl = renderState.gl;
-        renderState.useProgram(this.shadowMapProgram, scene);
+        renderState.useProgram(this.shadowMapProgram);
         gl.bindFramebuffer(gl.FRAMEBUFFER, this.shadowMapFramebuffer);
         gl.viewport(0, 0, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
         gl.colorMask(false, false, false, false);
@@ -449,6 +636,7 @@ abstract class BaseModel implements IModel {
 
         renderState.useMaterial(this.material, scene);
         this._renderPrologue(renderState, scene);
+        scene.camera.renderPrologue(renderState, scene);
         this.primitives.forEach((prim: Primitive) => {
             this._renderPrimitive(renderState, prim);
         });
@@ -456,7 +644,7 @@ abstract class BaseModel implements IModel {
     }
 }
 
-export class PBRMaterial extends Program implements IMaterial {
+export class PBRMaterial extends ModelProgram implements IMaterial {
     public u_localMatrix: WebGLUniformLocation;
     public a_position: number;
     public a_normal: number;
@@ -501,7 +689,7 @@ export class PBRMaterial extends Program implements IMaterial {
     public renderPrologue(renderState: RenderState, scene: Scene) {
         const gl = renderState.gl;
 
-        renderState.useProgram(this, scene);
+        renderState.useProgram(this);
 
         const setLight = (glLight:any, mLight:PointLight, i:number) => {
             gl.uniform3fv(glLight.position, mLight.position);
@@ -625,7 +813,7 @@ export class Plane extends BaseModel {
     }
 }
 
-class LightBillboardMaterial extends Program implements IMaterial {
+class LightBillboardMaterial extends ModelProgram implements IMaterial {
     public u_localMatrix: WebGLUniformLocation;
     public a_position: number;
 
@@ -656,7 +844,7 @@ class LightBillboardMaterial extends Program implements IMaterial {
     public renderPrologue(renderState: RenderState, scene: Scene) {
         const gl = renderState.gl;
 
-        renderState.useProgram(this, scene);
+        renderState.useProgram(this);
 
         gl.uniform2fv(this.u_size, [1, 1]);
         gl.uniform3fv(this.u_color, this.color);
