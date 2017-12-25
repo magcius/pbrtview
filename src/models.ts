@@ -188,32 +188,58 @@ export class Scene {
 }
 
 class PassFramebuffer {
-    public colorTex: WebGLTexture;
-    public depthRenderbuffer: WebGLRenderbuffer;
-
     public scale: number = 1.0;
+    public colorTex: WebGLTexture;
 
-    private framebuffer: WebGLFramebuffer;
+    private msaaFramebuffer: WebGLFramebuffer;
+    private colorRenderbuffer: WebGLRenderbuffer;
+    private depthRenderbuffer: WebGLRenderbuffer;
+    private resolveFramebuffer: WebGLFramebuffer;
     private width: number;
     private height: number;
+    private needsDepth: boolean = false;
 
-    checkResize(renderState: RenderState) {
+    recreate(renderState: RenderState, needsDepth: boolean) {
         const gl = renderState.gl;
 
         const width = renderState.viewport.width * this.scale;
         const height = renderState.viewport.height * this.scale;
 
-        if (this.width !== undefined && this.width === width && this.height === height)
+        if (this.width !== undefined && this.width === width && this.height === height && this.needsDepth == needsDepth)
             return;
 
         this.width = width;
         this.height = height;
+        this.needsDepth = needsDepth;
 
-        if (this.framebuffer) {
-            gl.deleteFramebuffer(this.framebuffer);
+        if (this.msaaFramebuffer) {
+            gl.deleteFramebuffer(this.msaaFramebuffer);
+            gl.deleteFramebuffer(this.resolveFramebuffer);
             gl.deleteTexture(this.colorTex);
-            gl.deleteRenderbuffer(this.depthRenderbuffer);
+            gl.deleteRenderbuffer(this.colorRenderbuffer);
+            if (this.depthRenderbuffer)
+                gl.deleteRenderbuffer(this.depthRenderbuffer);
         }
+
+        const samples = 4;
+
+        this.colorRenderbuffer = gl.createRenderbuffer();
+        gl.bindRenderbuffer(gl.RENDERBUFFER, this.colorRenderbuffer);
+        gl.renderbufferStorageMultisample(gl.RENDERBUFFER, samples, gl.RGBA8, width, height);
+
+        if (this.needsDepth) {
+            this.depthRenderbuffer = gl.createRenderbuffer();
+            gl.bindRenderbuffer(gl.RENDERBUFFER, this.depthRenderbuffer);
+            gl.renderbufferStorageMultisample(gl.RENDERBUFFER, samples, gl.DEPTH_COMPONENT16, width, height);
+        }
+
+        this.msaaFramebuffer = gl.createFramebuffer();
+        gl.bindFramebuffer(gl.READ_FRAMEBUFFER, this.msaaFramebuffer);
+        gl.framebufferRenderbuffer(gl.READ_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.RENDERBUFFER, this.colorRenderbuffer);
+        if (this.needsDepth) {
+            gl.framebufferRenderbuffer(gl.READ_FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, this.depthRenderbuffer);
+        }
+        gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
 
         this.colorTex = gl.createTexture();
         gl.bindTexture(gl.TEXTURE_2D, this.colorTex);
@@ -223,21 +249,25 @@ class PassFramebuffer {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
-        this.depthRenderbuffer = gl.createRenderbuffer();
-        gl.bindRenderbuffer(gl.RENDERBUFFER, this.depthRenderbuffer);
-        gl.renderbufferStorageMultisample(gl.RENDERBUFFER, 0, gl.DEPTH_COMPONENT16, width, height);
-
-        this.framebuffer = gl.createFramebuffer();
-        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.framebuffer);
+        this.resolveFramebuffer = gl.createFramebuffer();
+        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.resolveFramebuffer);
         gl.framebufferTexture2D(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.colorTex, 0);
-        gl.framebufferRenderbuffer(gl.DRAW_FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, this.depthRenderbuffer);
         gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
     }
 
     setActive(renderState: RenderState) {
         const gl = renderState.gl;
-        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.framebuffer);
+        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.msaaFramebuffer);
         gl.viewport(0, 0, this.width, this.height);
+    }
+
+    blit(renderState: RenderState) {
+        const gl = renderState.gl;
+        gl.bindFramebuffer(gl.READ_FRAMEBUFFER, this.msaaFramebuffer);
+        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.resolveFramebuffer);
+        gl.blitFramebuffer(0, 0, this.width, this.height, 0, 0, this.width, this.height, gl.COLOR_BUFFER_BIT, gl.LINEAR);
+        gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
+        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
     }
 }
 
@@ -312,10 +342,6 @@ class PostPass {
         this.setBuffers(renderState);
     }
 
-    public checkResize(renderState: RenderState) {
-        this.framebuffer.checkResize(renderState);
-    }
-
     public load(renderState: RenderState): boolean {
         return this.program.load(renderState.gl);
     }
@@ -352,9 +378,10 @@ export class Renderer {
         // Load our post passes.
         const postPasses = this.postPasses.filter((postPass) => postPass.load(renderState));
 
-        for (const postPass of postPasses) {
+        for (let i = 0; i < postPasses.length; i++) {
+            const postPass = postPasses[i];
             postPass.bind(renderState);
-            postPass.checkResize(renderState);
+            postPass.framebuffer.recreate(renderState, i === 0);
         }
 
         // Shadow maps.
@@ -396,6 +423,9 @@ export class Renderer {
         for (let i = 0; i < postPasses.length; i++) {
             const curPass = postPasses[i];
             const nextPass = postPasses[i + 1];
+
+            curPass.framebuffer.blit(renderState);
+
             if (nextPass) {
                 nextPass.framebuffer.setActive(renderState);
             } else {

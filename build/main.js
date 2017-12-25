@@ -210,20 +210,41 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
             PassFramebuffer = /** @class */ (function () {
                 function PassFramebuffer() {
                     this.scale = 1.0;
+                    this.needsDepth = false;
                 }
-                PassFramebuffer.prototype.checkResize = function (renderState) {
+                PassFramebuffer.prototype.recreate = function (renderState, needsDepth) {
                     var gl = renderState.gl;
                     var width = renderState.viewport.width * this.scale;
                     var height = renderState.viewport.height * this.scale;
-                    if (this.width !== undefined && this.width === width && this.height === height)
+                    if (this.width !== undefined && this.width === width && this.height === height && this.needsDepth == needsDepth)
                         return;
                     this.width = width;
                     this.height = height;
-                    if (this.framebuffer) {
-                        gl.deleteFramebuffer(this.framebuffer);
+                    this.needsDepth = needsDepth;
+                    if (this.msaaFramebuffer) {
+                        gl.deleteFramebuffer(this.msaaFramebuffer);
+                        gl.deleteFramebuffer(this.resolveFramebuffer);
                         gl.deleteTexture(this.colorTex);
-                        gl.deleteRenderbuffer(this.depthRenderbuffer);
+                        gl.deleteRenderbuffer(this.colorRenderbuffer);
+                        if (this.depthRenderbuffer)
+                            gl.deleteRenderbuffer(this.depthRenderbuffer);
                     }
+                    var samples = 4;
+                    this.colorRenderbuffer = gl.createRenderbuffer();
+                    gl.bindRenderbuffer(gl.RENDERBUFFER, this.colorRenderbuffer);
+                    gl.renderbufferStorageMultisample(gl.RENDERBUFFER, samples, gl.RGBA8, width, height);
+                    if (this.needsDepth) {
+                        this.depthRenderbuffer = gl.createRenderbuffer();
+                        gl.bindRenderbuffer(gl.RENDERBUFFER, this.depthRenderbuffer);
+                        gl.renderbufferStorageMultisample(gl.RENDERBUFFER, samples, gl.DEPTH_COMPONENT16, width, height);
+                    }
+                    this.msaaFramebuffer = gl.createFramebuffer();
+                    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, this.msaaFramebuffer);
+                    gl.framebufferRenderbuffer(gl.READ_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.RENDERBUFFER, this.colorRenderbuffer);
+                    if (this.needsDepth) {
+                        gl.framebufferRenderbuffer(gl.READ_FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, this.depthRenderbuffer);
+                    }
+                    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
                     this.colorTex = gl.createTexture();
                     gl.bindTexture(gl.TEXTURE_2D, this.colorTex);
                     gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, width, height);
@@ -231,19 +252,23 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
                     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
                     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-                    this.depthRenderbuffer = gl.createRenderbuffer();
-                    gl.bindRenderbuffer(gl.RENDERBUFFER, this.depthRenderbuffer);
-                    gl.renderbufferStorageMultisample(gl.RENDERBUFFER, 0, gl.DEPTH_COMPONENT16, width, height);
-                    this.framebuffer = gl.createFramebuffer();
-                    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.framebuffer);
+                    this.resolveFramebuffer = gl.createFramebuffer();
+                    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.resolveFramebuffer);
                     gl.framebufferTexture2D(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.colorTex, 0);
-                    gl.framebufferRenderbuffer(gl.DRAW_FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, this.depthRenderbuffer);
                     gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
                 };
                 PassFramebuffer.prototype.setActive = function (renderState) {
                     var gl = renderState.gl;
-                    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.framebuffer);
+                    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.msaaFramebuffer);
                     gl.viewport(0, 0, this.width, this.height);
+                };
+                PassFramebuffer.prototype.blit = function (renderState) {
+                    var gl = renderState.gl;
+                    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, this.msaaFramebuffer);
+                    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.resolveFramebuffer);
+                    gl.blitFramebuffer(0, 0, this.width, this.height, 0, 0, this.width, this.height, gl.COLOR_BUFFER_BIT, gl.LINEAR);
+                    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
+                    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
                 };
                 return PassFramebuffer;
             }());
@@ -315,9 +340,6 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                 PostPass.prototype.bind = function (renderState) {
                     this.setBuffers(renderState);
                 };
-                PostPass.prototype.checkResize = function (renderState) {
-                    this.framebuffer.checkResize(renderState);
-                };
                 PostPass.prototype.load = function (renderState) {
                     return this.program.load(renderState.gl);
                 };
@@ -348,51 +370,42 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                     var renderState = this.renderState;
                     // Load our post passes.
                     var postPasses = this.postPasses.filter(function (postPass) { return postPass.load(renderState); });
-                    try {
-                        for (var postPasses_1 = __values(postPasses), postPasses_1_1 = postPasses_1.next(); !postPasses_1_1.done; postPasses_1_1 = postPasses_1.next()) {
-                            var postPass = postPasses_1_1.value;
-                            postPass.bind(renderState);
-                            postPass.checkResize(renderState);
-                        }
-                    }
-                    catch (e_1_1) { e_1 = { error: e_1_1 }; }
-                    finally {
-                        try {
-                            if (postPasses_1_1 && !postPasses_1_1.done && (_a = postPasses_1.return)) _a.call(postPasses_1);
-                        }
-                        finally { if (e_1) throw e_1.error; }
+                    for (var i = 0; i < postPasses.length; i++) {
+                        var postPass = postPasses[i];
+                        postPass.bind(renderState);
+                        postPass.framebuffer.recreate(renderState, i === 0);
                     }
                     try {
                         // Shadow maps.
-                        for (var _b = __values(scene.lights), _c = _b.next(); !_c.done; _c = _b.next()) {
-                            var light = _c.value;
+                        for (var _a = __values(scene.lights), _b = _a.next(); !_b.done; _b = _a.next()) {
+                            var light = _b.value;
                             if (!light.renderShadowMapPrologue(renderState, scene))
                                 continue;
                             renderState.forceMaterial = true;
                             try {
-                                for (var _d = __values(scene.models), _e = _d.next(); !_e.done; _e = _d.next()) {
-                                    var model = _e.value;
+                                for (var _c = __values(scene.models), _d = _c.next(); !_d.done; _d = _c.next()) {
+                                    var model = _d.value;
                                     if (model.castsShadow)
                                         model.render(renderState, scene);
                                 }
                             }
-                            catch (e_2_1) { e_2 = { error: e_2_1 }; }
+                            catch (e_1_1) { e_1 = { error: e_1_1 }; }
                             finally {
                                 try {
-                                    if (_e && !_e.done && (_f = _d.return)) _f.call(_d);
+                                    if (_d && !_d.done && (_e = _c.return)) _e.call(_c);
                                 }
-                                finally { if (e_2) throw e_2.error; }
+                                finally { if (e_1) throw e_1.error; }
                             }
                             renderState.forceMaterial = false;
                             light.renderShadowMapEpilogue(renderState, scene);
                         }
                     }
-                    catch (e_3_1) { e_3 = { error: e_3_1 }; }
+                    catch (e_2_1) { e_2 = { error: e_2_1 }; }
                     finally {
                         try {
-                            if (_c && !_c.done && (_g = _b.return)) _g.call(_b);
+                            if (_b && !_b.done && (_f = _a.return)) _f.call(_a);
                         }
-                        finally { if (e_3) throw e_3.error; }
+                        finally { if (e_2) throw e_2.error; }
                     }
                     // "Normal" render.
                     // Set up our first post pass, if we have any.
@@ -406,22 +419,23 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
                     gl.cullFace(gl.BACK);
                     try {
-                        for (var _h = __values(scene.models), _j = _h.next(); !_j.done; _j = _h.next()) {
-                            var model = _j.value;
+                        for (var _g = __values(scene.models), _h = _g.next(); !_h.done; _h = _g.next()) {
+                            var model = _h.value;
                             model.render(renderState, scene);
                         }
                     }
-                    catch (e_4_1) { e_4 = { error: e_4_1 }; }
+                    catch (e_3_1) { e_3 = { error: e_3_1 }; }
                     finally {
                         try {
-                            if (_j && !_j.done && (_k = _h.return)) _k.call(_h);
+                            if (_h && !_h.done && (_j = _g.return)) _j.call(_g);
                         }
-                        finally { if (e_4) throw e_4.error; }
+                        finally { if (e_3) throw e_3.error; }
                     }
                     // Full-screen post passes.
                     for (var i = 0; i < postPasses.length; i++) {
                         var curPass = postPasses[i];
                         var nextPass = postPasses[i + 1];
+                        curPass.framebuffer.blit(renderState);
                         if (nextPass) {
                             nextPass.framebuffer.setActive(renderState);
                         }
@@ -433,7 +447,7 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                         gl.bindTexture(gl.TEXTURE_2D, curPass.framebuffer.colorTex);
                         curPass.drawQuad(renderState);
                     }
-                    var e_1, _a, e_3, _g, e_2, _f, e_4, _k;
+                    var e_2, _f, e_1, _e, e_3, _j;
                 };
                 return Renderer;
             }());
