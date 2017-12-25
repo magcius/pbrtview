@@ -41,7 +41,7 @@ var __values = (this && this.__values) || function (o) {
 System.register("models", ["gl-matrix"], function (exports_1, context_1) {
     "use strict";
     var __moduleName = context_1 && context_1.id;
-    var gl_matrix_1, TAU, VERT_N_ITEMS, VERT_N_BYTES, Program, Viewport, RenderState, Scene, Renderer, ShadowMapProgram, SHADOW_MAP_SIZE, PointLight, Group, BaseModel, PBRMaterial, JMDL, Plane, LightBillboardMaterial, LightBillboard;
+    var gl_matrix_1, TAU, VERT_N_ITEMS, VERT_N_BYTES, Program, Viewport, RenderState, Camera, Scene, Renderer, ShadowMapProgram, SHADOW_MAP_SIZE, PointLight, Group, BaseModel, PBRMaterial, JMDL, Plane, LightBillboardMaterial, LightBillboard;
     return {
         setters: [
             function (gl_matrix_1_1) {
@@ -155,31 +155,40 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                     this.viewport = viewport;
                     this.gl = this.viewport.gl;
                     this.time = 0;
-                    this.projection = gl_matrix_1.mat4.create();
-                    this.view = gl_matrix_1.mat4.create();
                 }
-                RenderState.prototype.checkResize = function () {
-                    var canvas = this.viewport.canvas;
-                    gl_matrix_1.mat4.perspective(this.projection, Math.PI / 4, canvas.width / canvas.height, 0.2, 50000);
-                };
-                RenderState.prototype.useProgram = function (prog) {
+                RenderState.prototype.useProgram = function (prog, scene) {
                     var gl = this.gl;
                     this.currentProgram = prog;
                     gl.useProgram(prog.getProgram());
-                    gl.uniformMatrix4fv(prog.u_projection, false, this.projection);
-                    gl.uniformMatrix4fv(prog.u_viewMatrix, false, this.view);
+                    scene.camera.bind(this, scene);
                 };
                 RenderState.prototype.useMaterial = function (material, scene) {
                     if (this.forceMaterial)
                         return;
                     material.renderPrologue(this, scene);
                 };
-                RenderState.prototype.setView = function (view) {
-                    gl_matrix_1.mat4.copy(this.view, view);
-                };
                 return RenderState;
             }());
             exports_1("RenderState", RenderState);
+            Camera = /** @class */ (function () {
+                function Camera() {
+                    this.projection = gl_matrix_1.mat4.create();
+                    this.view = gl_matrix_1.mat4.create();
+                }
+                Camera.prototype.checkResize = function (renderState, scene) {
+                    var viewport = renderState.viewport;
+                    var aspect = viewport.width / viewport.height;
+                    gl_matrix_1.mat4.perspective(this.projection, Math.PI / 4, aspect, 0.2, 50000);
+                };
+                Camera.prototype.bind = function (renderState, scene) {
+                    var gl = renderState.gl;
+                    var prog = renderState.currentProgram;
+                    gl.uniformMatrix4fv(prog.u_projection, false, this.projection);
+                    gl.uniformMatrix4fv(prog.u_viewMatrix, false, this.view);
+                };
+                return Camera;
+            }());
+            exports_1("Camera", Camera);
             // A Scene is a declaration of every entity in the scene graph.
             Scene = /** @class */ (function () {
                 function Scene() {
@@ -229,8 +238,8 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                         finally { if (e_2) throw e_2.error; }
                     }
                     // "Normal" render.
-                    renderState.checkResize();
-                    gl.viewport(0, 0, renderState.viewport.width, renderState.viewport.height);
+                    scene.camera.checkResize(renderState, scene);
+                    gl.viewport(0, 0, this.renderState.viewport.width, this.renderState.viewport.height);
                     gl.enable(gl.DEPTH_TEST);
                     gl.clearColor(0.88, 0.88, 0.88, 1);
                     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -297,7 +306,7 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                     if (!this.shadowMapProgram.load(renderState.gl))
                         return false;
                     var gl = renderState.gl;
-                    renderState.useProgram(this.shadowMapProgram);
+                    renderState.useProgram(this.shadowMapProgram, scene);
                     gl.bindFramebuffer(gl.FRAMEBUFFER, this.shadowMapFramebuffer);
                     gl.viewport(0, 0, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
                     gl.colorMask(false, false, false, false);
@@ -464,7 +473,7 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                 };
                 PBRMaterial.prototype.renderPrologue = function (renderState, scene) {
                     var gl = renderState.gl;
-                    renderState.useProgram(this);
+                    renderState.useProgram(this, scene);
                     var setLight = function (glLight, mLight, i) {
                         gl.uniform3fv(glLight.position, mLight.position);
                         gl.uniform3fv(glLight.color, mLight.color);
@@ -603,7 +612,7 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                 };
                 LightBillboardMaterial.prototype.renderPrologue = function (renderState, scene) {
                     var gl = renderState.gl;
-                    renderState.useProgram(this);
+                    renderState.useProgram(this, scene);
                     gl.uniform2fv(this.u_size, [1, 1]);
                     gl.uniform3fv(this.u_color, this.color);
                 };
@@ -742,6 +751,7 @@ System.register("pbrtview", ["gl-matrix", "models"], function (exports_2, contex
         var renderer = new Models.Renderer(new Models.Viewport(canvas));
         var gl = renderer.renderState.gl;
         var scene = new Models.Scene();
+        scene.camera = new Models.Camera();
         var lights = [
             new Models.PointLight(gl, [0, 50, 0], [1, .6, .6], 4, 100),
             new Models.PointLight(gl, [0, 45, 0], [.6, 1, .6], 4, 125),
@@ -782,7 +792,7 @@ System.register("pbrtview", ["gl-matrix", "models"], function (exports_2, contex
                 bb.setPosition(light.position);
                 bb.setColor(light.color);
             }
-            renderer.renderState.setView(updateCameraController());
+            gl_matrix_2.mat4.copy(scene.camera.view, updateCameraController());
             renderer.render(scene);
             window.requestAnimationFrame(update);
         }

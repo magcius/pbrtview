@@ -101,6 +101,7 @@ export function createViewer(canvas: HTMLCanvasElement) {
     const gl = renderer.renderState.gl;
 
     const scene = new Models.Scene();
+    scene.camera = new Models.Camera();
     const lights = [
         new Models.PointLight(gl, [0, 50, 0], [1, .6, .6], 4, 100),
         new Models.PointLight(gl, [0, 45, 0], [.6, 1, .6], 4, 125),
@@ -151,7 +152,7 @@ export function createViewer(canvas: HTMLCanvasElement) {
             bb.setColor(light.color);
         }
 
-        renderer.renderState.setView(updateCameraController());
+        mat4.copy(scene.camera.view, updateCameraController());
         renderer.render(scene);
 
         window.requestAnimationFrame(update);

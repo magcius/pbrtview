@@ -119,30 +119,19 @@ export class RenderState {
     public currentProgram: Program = null;
     public time: number;
 
-    public projection: mat4;
-    public view: mat4;
     public forceMaterial: boolean = false;
 
     constructor(viewport: Viewport) {
         this.viewport = viewport;
         this.gl = this.viewport.gl;
         this.time = 0;
-
-        this.projection = mat4.create();
-        this.view = mat4.create();
     }
 
-    public checkResize() {
-        const canvas = this.viewport.canvas;
-        mat4.perspective(this.projection, Math.PI / 4, canvas.width / canvas.height, 0.2, 50000);
-    }
-
-    public useProgram(prog: Program) {
+    public useProgram(prog: Program, scene: Scene) {
         const gl = this.gl;
         this.currentProgram = prog;
         gl.useProgram(prog.getProgram());
-        gl.uniformMatrix4fv(prog.u_projection, false, this.projection);
-        gl.uniformMatrix4fv(prog.u_viewMatrix, false, this.view);
+        scene.camera.bind(this, scene);
     }
 
     public useMaterial(material: IMaterial, scene: Scene) {
@@ -150,10 +139,6 @@ export class RenderState {
             return;
 
         material.renderPrologue(this, scene);
-    }
-
-    public setView(view: mat4) {
-        mat4.copy(this.view, view);
     }
 }
 
@@ -167,8 +152,32 @@ interface IModel {
     render(renderState: RenderState, scene: Scene);
 }
 
+export class Camera {
+    public projection: mat4;
+    public view: mat4;
+
+    constructor() {
+        this.projection = mat4.create();
+        this.view = mat4.create();
+    }
+
+    public checkResize(renderState: RenderState, scene: Scene) {
+        const viewport = renderState.viewport;
+        const aspect = viewport.width / viewport.height;
+        mat4.perspective(this.projection, Math.PI / 4, aspect, 0.2, 50000);
+    }
+
+    public bind(renderState: RenderState, scene: Scene) {
+        const gl = renderState.gl;
+        const prog = renderState.currentProgram;
+        gl.uniformMatrix4fv(prog.u_projection, false, this.projection);
+        gl.uniformMatrix4fv(prog.u_viewMatrix, false, this.view);
+    }
+}
+
 // A Scene is a declaration of every entity in the scene graph.
 export class Scene {
+    public camera: Camera;
     public lights: ILight[] = [];
     public models: IModel[] = [];
 }
@@ -200,8 +209,8 @@ export class Renderer {
         }
 
         // "Normal" render.
-        renderState.checkResize();
-        gl.viewport(0, 0, renderState.viewport.width, renderState.viewport.height);
+        scene.camera.checkResize(renderState, scene);
+        gl.viewport(0, 0, this.renderState.viewport.width, this.renderState.viewport.height);
 
         gl.enable(gl.DEPTH_TEST);
         gl.clearColor(0.88, 0.88, 0.88, 1);
@@ -275,7 +284,7 @@ export class PointLight implements ILight {
             return false;
 
         const gl = renderState.gl;
-        renderState.useProgram(this.shadowMapProgram);
+        renderState.useProgram(this.shadowMapProgram, scene);
         gl.bindFramebuffer(gl.FRAMEBUFFER, this.shadowMapFramebuffer);
         gl.viewport(0, 0, SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
         gl.colorMask(false, false, false, false);
@@ -492,7 +501,7 @@ export class PBRMaterial extends Program implements IMaterial {
     public renderPrologue(renderState: RenderState, scene: Scene) {
         const gl = renderState.gl;
 
-        renderState.useProgram(this);
+        renderState.useProgram(this, scene);
 
         const setLight = (glLight:any, mLight:PointLight, i:number) => {
             gl.uniform3fv(glLight.position, mLight.position);
@@ -647,7 +656,7 @@ class LightBillboardMaterial extends Program implements IMaterial {
     public renderPrologue(renderState: RenderState, scene: Scene) {
         const gl = renderState.gl;
 
-        renderState.useProgram(this);
+        renderState.useProgram(this, scene);
 
         gl.uniform2fv(this.u_size, [1, 1]);
         gl.uniform3fv(this.u_color, this.color);
