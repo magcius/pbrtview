@@ -224,9 +224,11 @@ class PassFramebuffer {
 
         const samples = 4;
 
+        gl.getExtension('EXT_color_buffer_float');
+
         this.colorRenderbuffer = gl.createRenderbuffer();
         gl.bindRenderbuffer(gl.RENDERBUFFER, this.colorRenderbuffer);
-        gl.renderbufferStorageMultisample(gl.RENDERBUFFER, samples, gl.RGBA8, width, height);
+        gl.renderbufferStorageMultisample(gl.RENDERBUFFER, samples, gl.RGBA16F, width, height);
 
         if (this.needsDepth) {
             this.depthRenderbuffer = gl.createRenderbuffer();
@@ -244,7 +246,7 @@ class PassFramebuffer {
 
         this.colorTex = gl.createTexture();
         gl.bindTexture(gl.TEXTURE_2D, this.colorTex);
-        gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, width, height);
+        gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA16F, width, height);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -294,6 +296,12 @@ export class PostPassProgram_Vignette extends PostPassProgram {
 export class PostPassProgram_ChromaAberration extends PostPassProgram {
     public compileProgram(gl:WebGL2RenderingContext, prog:WebGLProgram) {
         this.compileProgramFromURL(gl, prog, 'fx_PostChromaAberration.glsl');
+    }
+}
+
+export class PostPassProgram_Gamma extends PostPassProgram {
+    public compileProgram(gl:WebGL2RenderingContext, prog:WebGLProgram) {
+        this.compileProgramFromURL(gl, prog, 'fx_PostGamma.glsl');
     }
 }
 

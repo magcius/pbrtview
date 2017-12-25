@@ -41,7 +41,7 @@ var __values = (this && this.__values) || function (o) {
 System.register("models", ["gl-matrix"], function (exports_1, context_1) {
     "use strict";
     var __moduleName = context_1 && context_1.id;
-    var gl_matrix_1, TAU, VERT_N_ITEMS, VERT_N_BYTES, Program, ModelProgram, Viewport, RenderState, Camera, Scene, PassFramebuffer, PostPassProgram, PostPassProgram_Vignette, PostPassProgram_ChromaAberration, PostPass, Renderer, ShadowMapProgram, SHADOW_MAP_SIZE, PointLight, Group, BaseModel, PBRMaterial, JMDL, Plane, LightBillboardMaterial, LightBillboard;
+    var gl_matrix_1, TAU, VERT_N_ITEMS, VERT_N_BYTES, Program, ModelProgram, Viewport, RenderState, Camera, Scene, PassFramebuffer, PostPassProgram, PostPassProgram_Vignette, PostPassProgram_ChromaAberration, PostPassProgram_Gamma, PostPass, Renderer, ShadowMapProgram, SHADOW_MAP_SIZE, PointLight, Group, BaseModel, PBRMaterial, JMDL, Plane, LightBillboardMaterial, LightBillboard;
     return {
         setters: [
             function (gl_matrix_1_1) {
@@ -231,9 +231,10 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                             gl.deleteRenderbuffer(this.depthRenderbuffer);
                     }
                     var samples = 4;
+                    gl.getExtension('EXT_color_buffer_float');
                     this.colorRenderbuffer = gl.createRenderbuffer();
                     gl.bindRenderbuffer(gl.RENDERBUFFER, this.colorRenderbuffer);
-                    gl.renderbufferStorageMultisample(gl.RENDERBUFFER, samples, gl.RGBA8, width, height);
+                    gl.renderbufferStorageMultisample(gl.RENDERBUFFER, samples, gl.RGBA16F, width, height);
                     if (this.needsDepth) {
                         this.depthRenderbuffer = gl.createRenderbuffer();
                         gl.bindRenderbuffer(gl.RENDERBUFFER, this.depthRenderbuffer);
@@ -248,7 +249,7 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                     gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
                     this.colorTex = gl.createTexture();
                     gl.bindTexture(gl.TEXTURE_2D, this.colorTex);
-                    gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, width, height);
+                    gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA16F, width, height);
                     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
                     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
                     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -308,6 +309,17 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                 return PostPassProgram_ChromaAberration;
             }(PostPassProgram));
             exports_1("PostPassProgram_ChromaAberration", PostPassProgram_ChromaAberration);
+            PostPassProgram_Gamma = /** @class */ (function (_super) {
+                __extends(PostPassProgram_Gamma, _super);
+                function PostPassProgram_Gamma() {
+                    return _super !== null && _super.apply(this, arguments) || this;
+                }
+                PostPassProgram_Gamma.prototype.compileProgram = function (gl, prog) {
+                    this.compileProgramFromURL(gl, prog, 'fx_PostGamma.glsl');
+                };
+                return PostPassProgram_Gamma;
+            }(PostPassProgram));
+            exports_1("PostPassProgram_Gamma", PostPassProgram_Gamma);
             PostPass = /** @class */ (function () {
                 function PostPass(program) {
                     this.program = program;
@@ -943,6 +955,7 @@ System.register("pbrtview", ["gl-matrix", "models"], function (exports_2, contex
         var gl = renderer.renderState.gl;
         renderer.postPasses.push(new Models.PostPass(new Models.PostPassProgram_ChromaAberration()));
         renderer.postPasses.push(new Models.PostPass(new Models.PostPassProgram_Vignette()));
+        renderer.postPasses.push(new Models.PostPass(new Models.PostPassProgram_Gamma()));
         var scene = new Models.Scene();
         scene.camera = new Models.Camera();
         var lights = [

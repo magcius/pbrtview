@@ -102,6 +102,7 @@ export function createViewer(canvas: HTMLCanvasElement) {
 
     renderer.postPasses.push(new Models.PostPass(new Models.PostPassProgram_ChromaAberration()));
     renderer.postPasses.push(new Models.PostPass(new Models.PostPassProgram_Vignette()));
+    renderer.postPasses.push(new Models.PostPass(new Models.PostPassProgram_Gamma()));
 
     const scene = new Models.Scene();
     scene.camera = new Models.Camera();

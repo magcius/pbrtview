@@ -134,9 +134,7 @@ void main() {
 
     vec3 indirectDiffuseIrradiance = vec3(0.5);
     vec3 indirectReflectedLight = indirectDiffuseIrradiance * u_material.diffuseColor;
-    vec3 dcol = directReflectedLight + indirectReflectedLight;
-
-    vec3 color = pow(dcol, vec3(1.0 / 2.2));
+    vec3 color = directReflectedLight + indirectReflectedLight;
 
     o_color = vec4(color, 1);
 }
