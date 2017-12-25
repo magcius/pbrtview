@@ -39,7 +39,7 @@
             this._view = mat4.create();
 
             this._projection = mat4.create();
-            mat4.perspective(this._projection, TAU / 8, gl.viewportWidth / gl.viewportHeight, 1.0, 256);
+            mat4.perspective(this._projection, TAU / 8, gl.viewportWidth / gl.viewportHeight, 1.0, 1024);
 
             this._renderCtx = new RenderContext(gl);
             this._renderCtx.view = this._view;
@@ -157,7 +157,7 @@
 
             const pos = this.position;
             mat4.identity(this._shadowMapView);
-            mat4.rotateX(this._shadowMapView, this._shadowMapView, Math.PI / 2);
+            mat4.rotateX(this._shadowMapView, this._shadowMapView, TAU / 4);
             mat4.translate(this._shadowMapView, this._shadowMapView, [-pos[0], -pos[1], -pos[2]]);
             gl.uniformMatrix4fv(prog.uniforms.viewMatrix, false, this._shadowMapView);
         }

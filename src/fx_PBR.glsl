@@ -62,14 +62,12 @@ float attenuate(const in Light light, const in float dist) {
 vec3 brdf_F_Schlick(const in vec3 L, const in vec3 H, const in vec3 specularColor) {
     float LoH = clamp(dot(L, H), 0.0, 1.0);
     float fresnel = pow(1.0 - LoH, 5.0);
-    return (1.0 - fresnel) * specularColor + fresnel;
+    return specularColor + (1.0 - specularColor) * fresnel;
 }
 
 float brdf_G_GGX_Smith(const in vec3 N, const in vec3 L, const in vec3 V, const in float roughness) {
     // GGX / Smith from s2013_pbs_epic_notes_v2.pdf
-    float alpha = roughness * roughness;
-    float k = alpha * 0.5;
-
+    float k = pow((roughness + 1.0), 2.0) / 8.0;
     float NoL = clamp(dot(N, L), 0.0, 1.0);
     float NoV = clamp(dot(N, V), 0.0, 1.0);
     float G1L = 1.0 / (NoL * (1.0 - k) + k);
@@ -88,7 +86,7 @@ float brdf_D_GGX(const in vec3 N, const in vec3 H, const in float roughness) {
 
 vec3 brdf_Specular_GGX(const in vec3 N, const in vec3 L, const in vec3 V, const in float roughness) {
     vec3 H = normalize(L + V);
-    vec3 F = brdf_F_Schlick(L, H, vec3(0.04, 0.04, 0.04));
+    vec3 F = brdf_F_Schlick(L, H, vec3(0.05, 0.05, 0.05));
     float G = brdf_G_GGX_Smith(N, L, V, roughness);
     float D = brdf_D_GGX(N, H, roughness);
     return F * G * D;
@@ -119,6 +117,7 @@ vec3 light_getReflectedLight(const in int lightIndex) {
     float NoL = clamp(dot(N, L), 0.0, 1.0);
     vec3 diffuse = u_material.diffuseColor;
     vec3 specular = brdf_Specular_GGX(N, L, V, u_material.roughness);
+    return specular;
     vec3 directIrradiance = lightColor * NoL;
 
     // Technically not energy-conserving, since we add the same light

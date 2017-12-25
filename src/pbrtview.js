@@ -104,9 +104,9 @@
 
         var scene = new Models.Scene(gl);
         var lights = [
-            new Models.Light(gl, [50, 50, 50], [1, .6, .6], 4, 100),
-            new Models.Light(gl, [50, 45, 50], [.6, 1, .6], 4, 125),
-            new Models.Light(gl, [50, 55, 50], [.6, .6, 1], 4, 150),
+            new Models.Light(gl, [0, 50, 0], [1, .6, .6], 4, 100),
+            new Models.Light(gl, [0, 45, 0], [.6, 1, .6], 4, 125),
+            new Models.Light(gl, [0, 55, 0], [.6, .6, 1], 4, 150),
         ];
         scene.setLights(lights);
 
@@ -122,8 +122,8 @@
         scene.attachModel(eh1);
 
         var plane = new Models.Plane(gl);
-        plane.setMaterial(new Models.PBRMaterial(gl, [0.2, 0.2, 0.2], 0.5));
-        mat4.scale(plane.localMatrix, plane.localMatrix, [50, 1, 50]);
+        plane.setMaterial(new Models.PBRMaterial(gl, [0.2, 0.2, 0.2], 1.0));
+        mat4.scale(plane.localMatrix, plane.localMatrix, [200, 1, 200]);
         scene.attachModel(plane);
 
         window.lights = lights;
