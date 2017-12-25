@@ -297,7 +297,7 @@ export class PostPassProgram_ChromaAberration extends PostPassProgram {
     }
 }
 
-class PostPass {
+export class PostPass {
     public framebuffer: PassFramebuffer;
     private program: PostPassProgram;
 
@@ -368,8 +368,6 @@ export class Renderer {
 
     constructor(viewport: Viewport) {
         this.renderState = new RenderState(viewport);
-        this.postPasses.push(new PostPass(new PostPassProgram_ChromaAberration()));
-        this.postPasses.push(new PostPass(new PostPassProgram_Vignette()));
     }
 
     public render(scene: Scene): void {

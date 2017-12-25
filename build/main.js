@@ -359,12 +359,11 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                 };
                 return PostPass;
             }());
+            exports_1("PostPass", PostPass);
             Renderer = /** @class */ (function () {
                 function Renderer(viewport) {
                     this.postPasses = [];
                     this.renderState = new RenderState(viewport);
-                    this.postPasses.push(new PostPass(new PostPassProgram_ChromaAberration()));
-                    this.postPasses.push(new PostPass(new PostPassProgram_Vignette()));
                 }
                 Renderer.prototype.render = function (scene) {
                     var gl = this.renderState.gl;
@@ -942,6 +941,8 @@ System.register("pbrtview", ["gl-matrix", "models"], function (exports_2, contex
     function createViewer(canvas) {
         var renderer = new Models.Renderer(new Models.Viewport(canvas));
         var gl = renderer.renderState.gl;
+        renderer.postPasses.push(new Models.PostPass(new Models.PostPassProgram_ChromaAberration()));
+        renderer.postPasses.push(new Models.PostPass(new Models.PostPassProgram_Vignette()));
         var scene = new Models.Scene();
         scene.camera = new Models.Camera();
         var lights = [

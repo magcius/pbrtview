@@ -100,6 +100,9 @@ export function createViewer(canvas: HTMLCanvasElement) {
     const renderer = new Models.Renderer(new Models.Viewport(canvas));
     const gl = renderer.renderState.gl;
 
+    renderer.postPasses.push(new Models.PostPass(new Models.PostPassProgram_ChromaAberration()));
+    renderer.postPasses.push(new Models.PostPass(new Models.PostPassProgram_Vignette()));
+
     const scene = new Models.Scene();
     scene.camera = new Models.Camera();
     const lights = [
