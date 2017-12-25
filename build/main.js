@@ -175,6 +175,7 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                     if (this.forceMaterial)
                         return;
                     material.renderPrologue(this, scene);
+                    scene.camera.renderPrologue(this, scene);
                 };
                 return RenderState;
             }());
@@ -624,7 +625,6 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                         return;
                     renderState.useMaterial(this.material, scene);
                     this._renderPrologue(renderState, scene);
-                    scene.camera.renderPrologue(renderState, scene);
                     this.primitives.forEach(function (prim) {
                         _this._renderPrimitive(renderState, prim);
                     });

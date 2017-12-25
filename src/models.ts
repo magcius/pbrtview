@@ -144,6 +144,7 @@ export class RenderState {
             return;
 
         material.renderPrologue(this, scene);
+        scene.camera.renderPrologue(this, scene);
     }
 }
 
@@ -666,7 +667,6 @@ abstract class BaseModel implements IModel {
 
         renderState.useMaterial(this.material, scene);
         this._renderPrologue(renderState, scene);
-        scene.camera.renderPrologue(renderState, scene);
         this.primitives.forEach((prim: Primitive) => {
             this._renderPrimitive(renderState, prim);
         });
