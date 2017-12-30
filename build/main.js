@@ -282,8 +282,6 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                 PostPassProgram.prototype.bind = function (gl, prog) {
                     _super.prototype.bind.call(this, gl, prog);
                     this.u_tex = gl.getUniformLocation(prog, 'u_tex');
-                    this.a_position = gl.getAttribLocation(prog, 'a_position');
-                    this.a_uv = gl.getAttribLocation(prog, 'a_uv');
                 };
                 return PostPassProgram;
             }(Program));
@@ -325,34 +323,6 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                     this.program = program;
                     this.framebuffer = new PassFramebuffer();
                 }
-                PostPass.prototype.setBuffers = function (renderState) {
-                    if (this.vertBuffer)
-                        return;
-                    var vtx = new Float32Array(6);
-                    vtx[0] = -1.0;
-                    vtx[1] = -1.0;
-                    vtx[2] = 3.0;
-                    vtx[3] = -1.0;
-                    vtx[4] = -1.0;
-                    vtx[5] = 3.0;
-                    var gl = renderState.gl;
-                    this.vertBuffer = gl.createBuffer();
-                    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertBuffer);
-                    gl.bufferData(gl.ARRAY_BUFFER, vtx, gl.STATIC_DRAW);
-                    var uv = new Float32Array(6);
-                    uv[0] = 0.0;
-                    uv[1] = 0.0;
-                    uv[2] = 2.0;
-                    uv[3] = 0.0;
-                    uv[4] = 0.0;
-                    uv[5] = 2.0;
-                    this.uvBuffer = gl.createBuffer();
-                    gl.bindBuffer(gl.ARRAY_BUFFER, this.uvBuffer);
-                    gl.bufferData(gl.ARRAY_BUFFER, uv, gl.STATIC_DRAW);
-                };
-                PostPass.prototype.bind = function (renderState) {
-                    this.setBuffers(renderState);
-                };
                 PostPass.prototype.load = function (renderState) {
                     return this.program.load(renderState.gl);
                 };
@@ -360,12 +330,6 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                     var gl = renderState.gl;
                     renderState.useProgram(this.program);
                     gl.disable(gl.DEPTH_TEST);
-                    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertBuffer);
-                    gl.vertexAttribPointer(this.program.a_position, 2, gl.FLOAT, false, 0, 0);
-                    gl.enableVertexAttribArray(this.program.a_position);
-                    gl.bindBuffer(gl.ARRAY_BUFFER, this.uvBuffer);
-                    gl.vertexAttribPointer(this.program.a_uv, 2, gl.FLOAT, false, 0, 0);
-                    gl.enableVertexAttribArray(this.program.a_uv);
                     gl.uniform1i(this.program.u_tex, 0);
                     gl.drawArrays(gl.TRIANGLES, 0, 3);
                 };
@@ -384,7 +348,6 @@ System.register("models", ["gl-matrix"], function (exports_1, context_1) {
                     var postPasses = this.postPasses.filter(function (postPass) { return postPass.load(renderState); });
                     for (var i = 0; i < postPasses.length; i++) {
                         var postPass = postPasses[i];
-                        postPass.bind(renderState);
                         postPass.framebuffer.recreate(renderState, i === 0);
                     }
                     try {

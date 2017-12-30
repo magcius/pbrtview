@@ -276,14 +276,10 @@ class PassFramebuffer {
 
 abstract class PostPassProgram extends Program {
     public u_tex: WebGLUniformLocation;
-    public a_position: number;
-    public a_uv: number;
 
     public bind(gl: WebGL2RenderingContext, prog: WebGLProgram) {
         super.bind(gl, prog);
         this.u_tex = gl.getUniformLocation(prog, 'u_tex');
-        this.a_position = gl.getAttribLocation(prog, 'a_position');
-        this.a_uv = gl.getAttribLocation(prog, 'a_uv');
     }
 }
 
@@ -317,40 +313,6 @@ export class PostPass {
         this.framebuffer = new PassFramebuffer();
     }
 
-    private setBuffers(renderState: RenderState) {
-        if (this.vertBuffer)
-            return;
-
-        const vtx = new Float32Array(6);
-        vtx[0] = -1.0;
-        vtx[1] = -1.0;
-        vtx[2] = 3.0;
-        vtx[3] = -1.0;
-        vtx[4] = -1.0;
-        vtx[5] = 3.0;
-
-        const gl = renderState.gl;
-        this.vertBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.vertBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, vtx, gl.STATIC_DRAW);
-
-        const uv = new Float32Array(6);
-        uv[0] = 0.0;
-        uv[1] = 0.0;
-        uv[2] = 2.0;
-        uv[3] = 0.0;
-        uv[4] = 0.0;
-        uv[5] = 2.0;
-
-        this.uvBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.uvBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, uv, gl.STATIC_DRAW);
-    }
-
-    public bind(renderState: RenderState) {
-        this.setBuffers(renderState);
-    }
-
     public load(renderState: RenderState): boolean {
         return this.program.load(renderState.gl);
     }
@@ -359,12 +321,6 @@ export class PostPass {
         const gl = renderState.gl;
         renderState.useProgram(this.program);
         gl.disable(gl.DEPTH_TEST);
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.vertBuffer);
-        gl.vertexAttribPointer(this.program.a_position, 2, gl.FLOAT, false, 0, 0);
-        gl.enableVertexAttribArray(this.program.a_position);
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.uvBuffer);
-        gl.vertexAttribPointer(this.program.a_uv, 2, gl.FLOAT, false, 0, 0);
-        gl.enableVertexAttribArray(this.program.a_uv);
         gl.uniform1i(this.program.u_tex, 0);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
     }
@@ -387,7 +343,6 @@ export class Renderer {
 
         for (let i = 0; i < postPasses.length; i++) {
             const postPass = postPasses[i];
-            postPass.bind(renderState);
             postPass.framebuffer.recreate(renderState, i === 0);
         }
 

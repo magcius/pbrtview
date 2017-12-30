@@ -6,12 +6,11 @@ uniform sampler2D u_tex;
 varying vec2 v_uv;
 
 #ifdef VERT
-in vec2 a_position;
-in vec2 a_uv;
-
 void main() {
-    gl_Position = vec4(a_position, 1,1);
-    v_uv = a_uv;
+    v_uv.x = (gl_VertexID == 1) ? 2.0 : 0.0;
+    v_uv.y = (gl_VertexID == 2) ? 2.0 : 0.0;
+    gl_Position.xy = v_uv * vec2(2) - vec2(1);
+    gl_Position.zw = vec2(1);
 }
 #endif
 

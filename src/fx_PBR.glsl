@@ -65,14 +65,17 @@ vec3 brdf_F_Schlick(const in vec3 L, const in vec3 H, const in vec3 specularColo
     return specularColor + (1.0 - specularColor) * fresnel;
 }
 
-float brdf_G_GGX_Smith(const in vec3 N, const in vec3 L, const in vec3 V, const in float roughness) {
+float brdf_G_Smith_GGX1(const in float Nov, const in float k) {
     // GGX / Smith from s2013_pbs_epic_notes_v2.pdf
+    return Nov / (Nov * (1.0 - k) + k);
+}
+
+// Walter's Smith generalization.
+float brdf_G_Smith_GGX(const in vec3 N, const in vec3 L, const in vec3 V, const in float roughness) {
     float k = pow((roughness + 1.0), 2.0) / 8.0;
     float NoL = clamp(dot(N, L), 0.0, 1.0);
     float NoV = clamp(dot(N, V), 0.0, 1.0);
-    float G1L = 1.0 / (NoL * (1.0 - k) + k);
-    float G1V = 1.0 / (NoV * (1.0 - k) + k);
-    return (G1L * G1V) / (4.0);
+    return brdf_G_Smith_GGX1(NoL, k) * brdf_G_Smith_GGX1(NoV, k);
 }
 
 float brdf_D_GGX(const in vec3 N, const in vec3 H, const in float roughness) {
@@ -86,10 +89,19 @@ float brdf_D_GGX(const in vec3 N, const in vec3 H, const in float roughness) {
 
 vec3 brdf_Specular_GGX(const in vec3 N, const in vec3 L, const in vec3 V, const in float roughness) {
     vec3 H = normalize(L + V);
+
+    float NoL = clamp(dot(N, L), 0.00001, 1.0);
+    float NoV = clamp(dot(N, V), 0.00001, 1.0);
+    float NoH = clamp(dot(N, H), 0.0, 1.0);
+
     vec3 F = brdf_F_Schlick(L, H, vec3(0.05, 0.05, 0.05));
-    float G = brdf_G_GGX_Smith(N, L, V, roughness);
+    float G = brdf_G_Smith_GGX(N, L, V, roughness);
     float D = brdf_D_GGX(N, H, roughness);
-    return F * G * D;
+
+    // Naty's "visibility term"
+    float vis = D / (4.0 * NoV * NoL);
+
+    return F * G * vis;
 }
 
 float light_getShadow(const in int lightIndex) {
